@@ -142,7 +142,7 @@ def normalize_swizzle_rotation(wxyz):
 def pack_smallest_3_rotation(q):
     abs_q = np.abs(q)
     index = np.argmax(abs_q, axis=1)
-    q_rolled = np.roll(q, -index, axis=1)
+    q_rolled = np.roll(q, -index-1, axis=1)
     signs = np.sign(q_rolled[:, 3])
     three = q_rolled[:, :3] * signs[:, np.newaxis]
     three = (three * np.sqrt(2)) * 0.5 + 0.5
