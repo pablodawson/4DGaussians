@@ -18,7 +18,7 @@ from gaussian_to_unity.utils import *
 
 
 
-def create_initial_asset(pc : GaussianModel, pipe, scaling_modifier = 1.0):
+def get_order(pc : GaussianModel):
 
     means3D = pc.get_xyz
 
@@ -29,18 +29,10 @@ def create_initial_asset(pc : GaussianModel, pipe, scaling_modifier = 1.0):
     order = reorder_morton_job(bounds_min, 1.0/(bounds_max - bounds_min), means3D)
     order_indexes = order[:,1].tolist()
     
-    means3D_sorted = means3D[order_indexes].cpu().numpy()
-    path_pos = "pos.bytes"
-    
-    chunkSize = 256
-    means3D_sorted = create_chunks(means3D_sorted, means3D.shape[0], chunkSize)
-
-    create_positions_asset(means3D_sorted, path_pos, format="Norm11")
-
-    return means3D_sorted, order[:,1].tolist()
+    return order_indexes
 
 
-def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.0, stage="fine", order_indexes=None, save_name="pos.bytes"):
+def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.0, stage="fine", order_indexes=None, basepath = "output", idx=0):
     """
     Render the scene. 
     
@@ -61,7 +53,9 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     else:
         scales = pc._scaling
         rotations = pc._rotation
+    
     deformation_point = pc._deformation_table
+
     if stage == "coarse" :
         means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D, scales, rotations, opacity
     else:
@@ -73,12 +67,25 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
         pc._deformation_accum[deformation_point] += torch.abs(means3D_deform-means3D[deformation_point])
 
     means3D_final = torch.zeros_like(means3D)
+    rotations_final = torch.zeros_like(rotations)
+    scales_final = torch.zeros_like(scales)
     means3D_final[deformation_point] =  means3D_deform
+    rotations_final[deformation_point] =  rotations_deform
+    scales_final[deformation_point] =  scales_deform
     means3D_final[~deformation_point] = means3D[~deformation_point]
+    rotations_final[~deformation_point] = rotations[~deformation_point]
+    scales_final[~deformation_point] = scales[~deformation_point]
 
     # Keep the sorted order of the points
     means3D_to_save = means3D_final[order_indexes].cpu().numpy()
+
+    rotations_to_save, scales_to_save = linealize(rotations_final[order_indexes].cpu().numpy(), 
+                                                  scales_final[order_indexes].cpu().numpy())
     
     chunkSize = 256
-    means3D_to_save = create_chunks(means3D_to_save, means3D.shape[0], chunkSize)
-    create_positions_asset(means3D_to_save, save_name, format="Norm11")
+    means3D_to_save, scales_to_save = create_chunks(means3D_to_save, scales_to_save, means3D.shape[0], chunkSize)
+    sh_index = None
+
+    create_positions_asset(means3D_to_save, basepath, format="Norm11", idx= idx)
+    create_others_asset(rotations_to_save, scales_to_save, sh_index, basepath, scale_format="Norm11", idx= idx)
+    
