@@ -15,7 +15,7 @@ from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianR
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 from gaussian_to_unity.utils import *
-
+import time as tm
 
 
 def get_order(pc : GaussianModel):
@@ -56,16 +56,20 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     
     deformation_point = pc._deformation_table
 
+    timestart  = tm.time()
     if stage == "coarse" :
         means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D, scales, rotations, opacity
     else:
         means3D_deform, scales_deform, rotations_deform, opacity_deform = pc._deformation(means3D[deformation_point], scales[deformation_point], 
                                                                          rotations[deformation_point], opacity[deformation_point],
                                                                          time[deformation_point])
+    print("deformation MLP time:", tm.time()-timestart)
+
     # print(time.max())
     with torch.no_grad():
         pc._deformation_accum[deformation_point] += torch.abs(means3D_deform-means3D[deformation_point])
 
+    timestart = tm.time()
     means3D_final = torch.zeros_like(means3D)
     rotations_final = torch.zeros_like(rotations)
     scales_final = torch.zeros_like(scales)
@@ -76,16 +80,28 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     rotations_final[~deformation_point] = rotations[~deformation_point]
     scales_final[~deformation_point] = scales[~deformation_point]
 
+    print("array indexing time:", tm.time()-timestart)
     # Keep the sorted order of the points
+
+    timestart = tm.time()
     means3D_to_save = means3D_final[order_indexes].cpu().numpy()
 
     rotations_to_save, scales_to_save = linealize(rotations_final[order_indexes].cpu().numpy(), 
                                                   scales_final[order_indexes].cpu().numpy())
     
+    print("linealization time:", tm.time()-timestart)
+
+    timestart = tm.time()
     chunkSize = 256
     means3D_to_save, scales_to_save = create_chunks(means3D_to_save, scales_to_save, means3D.shape[0], chunkSize)
     sh_index = None
+    
+    print("chunk creation time:", tm.time()-timestart)
 
+    timestart = tm.time()
     create_positions_asset(means3D_to_save, basepath, format="Norm11", idx= idx)
+    print("create_positions_asset time:", tm.time()-timestart)
+    timestart = tm.time()
     create_others_asset(rotations_to_save, scales_to_save, sh_index, basepath, scale_format="Norm11", idx= idx)
+    print("create_others_asset time:", tm.time()-timestart)
     
