@@ -115,8 +115,8 @@ def create_chunks(mean3d, scale, gaussianCount, chunk_size):
         mean3d[i:i+chunk_size], min_pos, max_pos = normalize_chunk(chunk_pos)
         scale[i:i+chunk_size], min_scale, max_scale = normalize_chunk(chunk_scale)
 
-        pos_chunks.append( [np.ravel([mi,ma],order='F') for mi,ma in zip(min_pos,max_pos)] )
-        scale_chunks.append( [np.ravel([mi,ma],order='F') for mi,ma in zip(min_scale,max_scale)] )
+        pos_chunks.append([min_pos, max_pos])
+        scale_chunks.append([min_scale, max_scale])
         
     return mean3d, scale, pos_chunks, scale_chunks
 
@@ -141,6 +141,10 @@ def create_others_asset(rotations, scales, sh_index, basepath, scale_format, idx
             f.write(encode_vector(rotation, "Norm10"))
             f.write(encode_vector(scale, scale_format))
 
+def f32tof16(f32):
+    f16 = np.float16(f32)
+    return f16.view(np.uint16)
+
 def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0):
 
     output_folder = os.path.join(os.path.dirname(basepath), "chunks")
@@ -149,9 +153,17 @@ def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0):
     format_str = "ffffffIII"
     
     with open(path, 'ab') as f:
-        for pos_chunk, scale_chunks in zip(pos_chunks, scale_chunks):
-            data = np.concatenate((pos_chunk, scale_chunks))
-            packed_data = struct.pack(format_str, data)
+        for pos_chunk, scale_chunk in zip(pos_chunks, scale_chunks):
+            # f32 -> f16
+            sclX = f32tof16(scale_chunk[0][0]) | (f32tof16(scale_chunk[1][0]) << 16)
+            sclY = f32tof16(scale_chunk[0][1]) | (f32tof16(scale_chunk[1][1]) << 16)
+            sclZ = f32tof16(scale_chunk[0][2]) | (f32tof16(scale_chunk[1][2]) << 16)
+
+                        
+            packed_data = struct.pack(format_str,
+                    pos_chunk[0][0], pos_chunk[1][0], pos_chunk[0][1], pos_chunk[1][1], pos_chunk[0][2], pos_chunk[1][2], 
+                    sclX, sclY, sclZ)
+            
             f.write(packed_data)
     
 def normalize_swizzle_rotation(wxyz):

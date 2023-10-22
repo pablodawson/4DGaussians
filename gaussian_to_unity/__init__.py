@@ -93,7 +93,7 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
 
     timestart = tm.time()
     chunkSize = 256
-    means3D_to_save, scales_to_save = create_chunks(means3D_to_save, scales_to_save, means3D.shape[0], chunkSize)
+    means3D_to_save, scales_to_save, means_chunks, scale_chunks = create_chunks(means3D_to_save, scales_to_save, means3D.shape[0], chunkSize)
     sh_index = None
     
     print("chunk creation time:", tm.time()-timestart)
@@ -104,4 +104,8 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     timestart = tm.time()
     create_others_asset(rotations_to_save, scales_to_save, sh_index, basepath, scale_format="Norm11", idx= idx)
     print("create_others_asset time:", tm.time()-timestart)
+
+    timestart = tm.time()
+    create_chunks_asset(means_chunks, scale_chunks, basepath, idx= idx)
+    print("create_chunks_asset time:", tm.time()-timestart)
     
