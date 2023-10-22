@@ -25,7 +25,7 @@ to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
 def render_set(model_path, name, iteration, views, gaussians, pipeline):
     
-    save_path = "output_unity_2/"
+    save_path = os.path.join(model_path, "render_unity")
     makedirs(save_path, exist_ok=True)
     
     order = get_order(gaussians)
@@ -60,9 +60,9 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--skip_video", action="store_true")
     parser.add_argument("--save_interval", default=10)
-    parser.add_argument("--configs", type=str, default="arguments/dynerf/default.py")
+    parser.add_argument("--configs", type=str, default="arguments/hypernerf/default.py")
     args = get_combined_args(parser)
-
+    
     args.model_path = "output/cookie"
     print("Rendering " , args.model_path)
     if args.configs:
