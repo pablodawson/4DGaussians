@@ -101,18 +101,24 @@ def encode_quat_to_norm10(v):
 def normalize_chunk(chunk):
     bounds_min, bounds_max = calculate_bounds(chunk)
     normalized_chunk = (chunk - bounds_min) / (bounds_max - bounds_min + 1e-6)
-    return normalized_chunk
+    return normalized_chunk, bounds_min, bounds_max
 
 def create_chunks(mean3d, scale, gaussianCount, chunk_size):
     
+    pos_chunks = []
+    scale_chunks = []
+
     for i in range(0, gaussianCount, chunk_size):
         chunk_pos = mean3d[i:i+chunk_size]
         chunk_scale = scale[i:i+chunk_size]
         
-        mean3d[i:i+chunk_size] = normalize_chunk(chunk_pos)
-        scale[i:i+chunk_size] = normalize_chunk(chunk_scale)
-    
-    return mean3d, scale
+        mean3d[i:i+chunk_size], min_pos, max_pos = normalize_chunk(chunk_pos)
+        scale[i:i+chunk_size], min_scale, max_scale = normalize_chunk(chunk_scale)
+
+        pos_chunks.append( [np.ravel([mi,ma],order='F') for mi,ma in zip(min_pos,max_pos)] )
+        scale_chunks.append( [np.ravel([mi,ma],order='F') for mi,ma in zip(min_scale,max_scale)] )
+        
+    return mean3d, scale, pos_chunks, scale_chunks
 
 def create_positions_asset(means3D_sorted, basepath, format='Norm11', idx=0):
     
@@ -135,6 +141,19 @@ def create_others_asset(rotations, scales, sh_index, basepath, scale_format, idx
             f.write(encode_vector(rotation, "Norm10"))
             f.write(encode_vector(scale, scale_format))
 
+def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0):
+
+    output_folder = os.path.join(os.path.dirname(basepath), "chunks")
+    os.makedirs(output_folder, exist_ok=True)
+    path = os.path.join(output_folder, f"{idx}.bytes")
+    format_str = "ffffffIII"
+    
+    with open(path, 'ab') as f:
+        for pos_chunk, scale_chunks in zip(pos_chunks, scale_chunks):
+            data = np.concatenate((pos_chunk, scale_chunks))
+            packed_data = struct.pack(format_str, data)
+            f.write(packed_data)
+    
 def normalize_swizzle_rotation(wxyz):
     return np.roll(np.array(wxyz / np.linalg.norm(wxyz)), -1)
 
