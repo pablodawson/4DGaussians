@@ -108,17 +108,21 @@ def create_chunks(mean3d, scale, gaussianCount, chunk_size):
     pos_chunks = []
     scale_chunks = []
 
+    positions = np.zeros((gaussianCount, 3), dtype=np.float32)
+    scales = np.zeros((gaussianCount, 3), dtype=np.float32)
+
     for i in range(0, gaussianCount, chunk_size):
-        chunk_pos = mean3d[i:i+chunk_size]
-        chunk_scale = scale[i:i+chunk_size]
         
-        mean3d[i:i+chunk_size], min_pos, max_pos = normalize_chunk(chunk_pos)
-        scale[i:i+chunk_size], min_scale, max_scale = normalize_chunk(chunk_scale)
+        chunk_pos = mean3d[i:i+chunk_size].copy()
+        chunk_scale = scale[i:i+chunk_size].copy()
+        
+        positions[i:i+chunk_size], min_pos, max_pos = normalize_chunk(chunk_pos)
+        scales[i:i+chunk_size], min_scale, max_scale = normalize_chunk(chunk_scale)
 
         pos_chunks.append([min_pos, max_pos])
         scale_chunks.append([min_scale, max_scale])
         
-    return mean3d, scale, pos_chunks, scale_chunks
+    return positions, scales, pos_chunks, scale_chunks
 
 def create_positions_asset(means3D_sorted, basepath, format='Norm11', idx=0):
     
