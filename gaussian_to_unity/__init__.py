@@ -96,6 +96,19 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     means3D_to_save, scales_to_save, means_chunks, scale_chunks = create_chunks(means3D_sorted, scales_linealized, means3D.shape[0], chunkSize)
     sh_index = None
     
+    # Debug reconstruction
+    debug = True
+
+    if (debug):
+        pos_debug = means3D_to_save[0:chunkSize].copy()
+        min_pos_chunk = means_chunks[0][0]
+        max_pos_chunk = means_chunks[0][1]
+
+        pos_recon = min_pos_chunk + pos_debug * (max_pos_chunk - min_pos_chunk)
+
+        print(pos_recon[0:20])
+        print(means3D_sorted[0:20])
+
     print("chunk creation time:", tm.time()-timestart)
 
     timestart = tm.time()
