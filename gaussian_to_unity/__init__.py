@@ -84,16 +84,16 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     # Keep the sorted order of the points
 
     timestart = tm.time()
-    means3D_to_save = means3D_final[order_indexes].cpu().numpy()
+    means3D_sorted = means3D_final[order_indexes].cpu().numpy()
 
-    rotations_to_save, scales_to_save = linealize(rotations_final[order_indexes].cpu().numpy(), 
+    rotations_to_save, scales_linealized= linealize(rotations_final[order_indexes].cpu().numpy(), 
                                                   scales_final[order_indexes].cpu().numpy())
     
     print("linealization time:", tm.time()-timestart)
 
     timestart = tm.time()
     chunkSize = 256
-    means3D_to_save, scales_to_save, means_chunks, scale_chunks = create_chunks(means3D_to_save, scales_to_save, means3D.shape[0], chunkSize)
+    means3D_to_save, scales_to_save, means_chunks, scale_chunks = create_chunks(means3D_sorted, scales_linealized, means3D.shape[0], chunkSize)
     sh_index = None
     
     print("chunk creation time:", tm.time()-timestart)
@@ -101,6 +101,7 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     timestart = tm.time()
     create_positions_asset(means3D_to_save, basepath, format="Norm11", idx= idx)
     print("create_positions_asset time:", tm.time()-timestart)
+    
     timestart = tm.time()
     create_others_asset(rotations_to_save, scales_to_save, sh_index, basepath, scale_format="Norm11", idx= idx)
     print("create_others_asset time:", tm.time()-timestart)
