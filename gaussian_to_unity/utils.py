@@ -198,7 +198,7 @@ def linealize(rot, scale):
 
     return rot, scale
 
-def create_one_file(basepath, pos_file_format="Norm11"):
+def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_count=0):
     positions_path = os.path.join(os.path.dirname(basepath), "positions")
     chunks_path = os.path.join(os.path.dirname(basepath), "chunks")
     
@@ -207,6 +207,8 @@ def create_one_file(basepath, pos_file_format="Norm11"):
     # Header information
     frame_count = len(os.listdir(positions_path))
     data.append(struct.pack('I', frame_count))
+    data.append(struct.pack('I', chunk_count))
+    data.append(struct.pack('I', splat_count))
     data.append(struct.pack('I', Formats[pos_file_format]))
     
     # Read all the files intercalated
