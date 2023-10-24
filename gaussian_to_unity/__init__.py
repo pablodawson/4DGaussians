@@ -32,7 +32,9 @@ def get_order(pc : GaussianModel):
     return order_indexes
 
 
-def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.0, stage="fine", order_indexes=None, basepath = "output", idx=0):
+def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.0, 
+               stage="fine", order_indexes=None, basepath = "output", 
+               idx=0, pos_format="Norm11"):
     """
     Render the scene. 
     
@@ -112,12 +114,12 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     print("chunk creation time:", tm.time()-timestart)
 
     timestart = tm.time()
-    create_positions_asset(means3D_to_save, basepath, format="Norm11", idx= idx)
+    create_positions_asset(means3D_to_save, basepath, format=pos_format, idx= idx)
     print("create_positions_asset time:", tm.time()-timestart)
     
-    timestart = tm.time()
-    create_others_asset(rotations_to_save, scales_to_save, sh_index, basepath, scale_format="Norm11", idx= idx)
-    print("create_others_asset time:", tm.time()-timestart)
+    #timestart = tm.time()
+    #create_others_asset(rotations_to_save, scales_to_save, sh_index, basepath, scale_format="Norm11", idx= idx)
+   # print("create_others_asset time:", tm.time()-timestart)
 
     timestart = tm.time()
     create_chunks_asset(means_chunks, scale_chunks, basepath, idx= idx)

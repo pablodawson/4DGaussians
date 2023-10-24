@@ -197,3 +197,32 @@ def linealize(rot, scale):
     scale = scale ** (1.0 / 8.0)
 
     return rot, scale
+
+def create_one_file(basepath, pos_file_format="Norm11"):
+    positions_path = os.path.join(os.path.dirname(basepath), "positions")
+    chunks_path = os.path.join(os.path.dirname(basepath), "chunks")
+    
+    data = []
+    
+    # Header information
+    frame_count = len(os.listdir(positions_path))
+    data.append(struct.pack('I', frame_count))
+    data.append(struct.pack('I', Formats[pos_file_format]))
+    
+    # Read all the files intercalated
+    for position_file in sorted(os.listdir(positions_path)):
+        with open(os.path.join(positions_path, position_file), 'rb') as f:
+            data.append(f.read())
+
+        with open(os.path.join(chunks_path, position_file), 'rb') as f:
+            data.append(f.read())
+    
+    # Write the data to a single file
+    file_name = os.path.join(os.path.dirname(basepath), "dynamic_data.bytes")
+
+    with open(file_name, 'wb') as f:
+        for chunk in data:
+            f.write(chunk)
+
+if __name__=="__main__":
+    create_one_file("output/cookie/render_unity_neww")
