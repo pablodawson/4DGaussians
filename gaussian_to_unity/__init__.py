@@ -84,10 +84,10 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     # Keep the sorted order of the points
 
     timestart = tm.time()
-    means3D_sorted = means3D_final[order_indexes].cpu().numpy()
+    means3D_sorted = means3D_final[order_indexes].cpu().numpy().copy()
 
-    rotations_to_save, scales_linealized= linealize(rotations_final[order_indexes].cpu().numpy(), 
-                                                  scales_final[order_indexes].cpu().numpy())
+    rotations_to_save, scales_linealized= linealize(rotations_final[order_indexes].cpu().numpy().copy(), 
+                                                  scales_final[order_indexes].cpu().numpy().copy())
     
     print("linealization time:", tm.time()-timestart)
 
@@ -106,8 +106,8 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
 
         pos_recon = min_pos_chunk + pos_debug * (max_pos_chunk - min_pos_chunk)
 
-        print(pos_recon[0:20])
-        print(means3D_sorted[0:20])
+        # Ensure correct reconstruction
+        print((pos_recon[0:20] - means3D_sorted[0:20] <= 1e-2).all())
 
     print("chunk creation time:", tm.time()-timestart)
 
