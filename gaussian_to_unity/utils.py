@@ -103,7 +103,7 @@ def normalize_chunk(chunk):
     normalized_chunk = (chunk - bounds_min) / (bounds_max - bounds_min + 1e-6)
     return normalized_chunk, bounds_min, bounds_max
 
-def create_chunks(mean3d, scale, gaussianCount, chunk_size):
+def create_chunks(mean3d_in, scale, gaussianCount, chunk_size):
     
     pos_chunks = []
     scale_chunks = []
@@ -113,7 +113,7 @@ def create_chunks(mean3d, scale, gaussianCount, chunk_size):
 
     for i in range(0, gaussianCount, chunk_size):
         
-        chunk_pos = mean3d[i:i+chunk_size].copy()
+        chunk_pos = mean3d_in[i:i+chunk_size].copy()
         chunk_scale = scale[i:i+chunk_size].copy()
         
         positions[i:i+chunk_size], min_pos, max_pos = normalize_chunk(chunk_pos)
@@ -156,7 +156,7 @@ def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0):
     path = os.path.join(output_folder, f"{idx}.bytes")
     format_str = "ffffffIII"
     
-    with open(path, 'ab') as f:
+    with open(path, 'wb') as f:
         for pos_chunk, scale_chunk in zip(pos_chunks, scale_chunks):
             # f32 -> f16
             sclX = f32tof16(scale_chunk[0][0]) | (f32tof16(scale_chunk[1][0]) << 16)
@@ -199,6 +199,7 @@ def linealize(rot, scale):
     return rot, scale
 
 def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_count=0):
+
     positions_path = os.path.join(os.path.dirname(basepath), "positions")
     chunks_path = os.path.join(os.path.dirname(basepath), "chunks")
     
@@ -226,5 +227,32 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
         for chunk in data:
             f.write(chunk)
 
+
+def create_one_file_chunk_pos(basepath):
+
+    positions_path = os.path.join(os.path.dirname(basepath), "positions")
+    chunks_path = os.path.join(os.path.dirname(basepath), "chunks")
+
+    pos_data = []
+    chunk_data = []
+
+    for position_file in sorted(os.listdir(positions_path)):
+        with open(os.path.join(positions_path, position_file), 'rb') as f1:
+            pos_data.append(f1.read())
+
+        with open(os.path.join(chunks_path, position_file), 'rb') as f2:
+            chunk_data.append(f2.read())
+    
+    pos_file_name = os.path.join(os.path.dirname(basepath), "position_data.bytes")
+    chunk_file_name = os.path.join(os.path.dirname(basepath), "chunk_data.bytes")
+
+    with open(pos_file_name, 'wb') as f1:
+        for chunk in pos_data:
+            f1.write(chunk)
+    
+    with open(chunk_file_name, 'wb') as f2:
+        for chunk in chunk_data:
+            f2.write(chunk)
+
 if __name__=="__main__":
-    create_one_file("output/cookie/render_unity_neww")
+    create_one_file_chunk_pos("output/cookie/render_unity/")
