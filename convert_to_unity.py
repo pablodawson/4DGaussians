@@ -14,8 +14,9 @@ from scene import Scene
 import os
 from tqdm import tqdm
 from os import makedirs
-from gaussian_to_unity import save_frame, get_order
-from gaussian_to_unity.utils import create_one_file, create_one_file_chunk_pos
+from gaussian_to_unity import save_frame
+from gaussian_to_unity.converter import get_order
+from gaussian_to_unity.utils import create_one_file, create_one_file_chunk_pos, create_json
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args, ModelHiddenParams
@@ -26,10 +27,10 @@ to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
 def render_set(model_path, name, iteration, views, gaussians, pipeline):
     
-    save_path = os.path.join(model_path, "cut_beef/")
+    save_path = os.path.join(model_path, "cut_beef_newformat/")
     makedirs(save_path, exist_ok=True)
     
-    order = get_order(gaussians)
+    order = get_order(gaussians.get_xyz)
 
     idx2= 0
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
@@ -39,14 +40,14 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline):
             idx2+=1
             save_frame(view, gaussians, pipeline, order_indexes=order, basepath=save_path, idx=idx2, pos_format=args.pos_format)
     
-    print("Creating final file")
+    # Create json with metadata
 
     splat_count = gaussians.get_xyz.cpu().numpy().shape[0]
-    chunk_count = splat_count // args.chunk_size
-
-    #create_one_file(save_path, pos_file_format=args.pos_format, splat_count=splat_count, chunk_count=chunk_count)
-    create_one_file_chunk_pos(save_path)
+    chunk_count = (splat_count+args.chunk_size-1) // args.chunk_size
     
+    #create_json(save_path, splat_count, chunk_count, args.pos_format, args.save_interval, args.fps, len(views))
+    create_one_file(save_path, pos_file_format=args.pos_format, splat_count=splat_count, chunk_count=chunk_count, frame_time=1/args.fps)
+
     time2=time()
     print("FPS:",(len(views)-1)/(time2-time1))
 
@@ -72,6 +73,7 @@ if __name__ == "__main__":
     parser.add_argument("--configs", type=str, default="arguments/dynerf/default.py")
     parser.add_argument("--pos-format", type=str, default="Norm11")
     parser.add_argument("--chunk-size", type=int, default=256)
+    parser.add_argument("--fps", type=int, default=30)
 
     args = get_combined_args(parser)
     

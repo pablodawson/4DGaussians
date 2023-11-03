@@ -1,7 +1,7 @@
 import os
 import cv2
 
-data_path = "data/dynerf/cut_roasted_beef/"
+data_path = "data/dynerf/coffee_martini/"
 
 # Create a VideoCapture object and read from input file
 cams = []

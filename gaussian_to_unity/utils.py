@@ -1,9 +1,17 @@
 import numpy as np
 import struct
 import os
+import json
 
 kScaler = (1 << 21) - 1
-Formats = {'Float32':12, 'Norm16':6, 'Norm11':4, 'Norm6':2}
+
+VectorFormats = {'Float32':0, 'Norm16':1, 'Norm11':2, 'Norm6':3}
+
+SHFormats = {'Float32':0, 'Float16':1, 'Norm11':2, 'Norm6':3, 
+             'Cluster64k':4, 'Cluster32k':5, 'Cluster16k':6, 
+             'Cluster8k':7, 'Cluster4k':8}
+
+ColorFormats = {'Float32':0, 'Float16':1, 'Norm8':2, 'BC7':3}
 
 def morton_part1by2(x):
     x &= 0x1fffff
@@ -124,13 +132,14 @@ def create_chunks(mean3d_in, scale, gaussianCount, chunk_size):
         
     return positions, scales, pos_chunks, scale_chunks
 
-def create_positions_asset(means3D_sorted, basepath, format='Norm11', idx=0):
-    
-    output_folder = os.path.join(os.path.dirname(basepath), "positions")
-    os.makedirs(output_folder, exist_ok=True)
-    path = os.path.join(output_folder, f"{idx}.bytes")
+def create_positions_asset(means3D_sorted, basepath, format='Norm11', idx=-1):
+    if idx == 0:
+        if os.path.exists(os.path.join(basepath, f"position_data.bytes")):
+            os.remove(os.path.join(basepath, f"position_data.bytes"))
 
-    with open(path, 'wb') as f:
+    path = os.path.join(basepath, f"position_data.bytes")
+
+    with open(path, 'ab') as f:
         for mean3d in means3D_sorted:
             f.write(encode_vector(mean3d, format))
 
@@ -151,12 +160,14 @@ def f32tof16(f32):
 
 def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0):
 
-    output_folder = os.path.join(os.path.dirname(basepath), "chunks")
-    os.makedirs(output_folder, exist_ok=True)
-    path = os.path.join(output_folder, f"{idx}.bytes")
+    path = os.path.join(basepath, f"chunk_data.bytes")
+    if idx == 0:
+        if os.path.exists(path):
+            os.remove(path)
+
     format_str = "ffffffIII"
     
-    with open(path, 'wb') as f:
+    with open(path, 'ab') as f:
         for pos_chunk, scale_chunk in zip(pos_chunks, scale_chunks):
             # f32 -> f16
             sclX = f32tof16(scale_chunk[0][0]) | (f32tof16(scale_chunk[1][0]) << 16)
@@ -198,19 +209,51 @@ def linealize(rot, scale):
 
     return rot, scale
 
-def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_count=0):
+def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_count=0, frame_time=1/20):
+
+    # Current format
+    # 1- Metadata
+    # 2- Static data
+    # 3- Dynamic data, intercalated positions and chunks
 
     positions_path = os.path.join(os.path.dirname(basepath), "positions")
     chunks_path = os.path.join(os.path.dirname(basepath), "chunks")
     
     data = []
     
-    # Header information
+    # ---- Header information -----
+
+    # For now this is comes from Unity, hence the hardcoding
+    format_version = 20231006
+    scale_file_format = "Norm11"
+    sh_file_format= "Norm6"
+    color_format = "Norm8x4"
+    color_width = 2048
+    color_height = 112
+
     frame_count = len(os.listdir(positions_path))
-    data.append(struct.pack('I', frame_count))
-    data.append(struct.pack('I', chunk_count))
-    data.append(struct.pack('I', splat_count))
-    data.append(struct.pack('I', Formats[pos_file_format]))
+
+    data.append(struct.pack('I', format_version)) # Format version
+    data.append(struct.pack('I', splat_count)) # Splat count
+    data.append(struct.pack('f', frame_time)) # Frame time
+    data.append(struct.pack('I', frame_count)) # Frame count
+    data.append(struct.pack('I', chunk_count)) # Chunk count
+    data.append(struct.pack('I', VectorFormats[pos_file_format])) # Position format
+    data.append(struct.pack('I', VectorFormats[scale_file_format])) # Scale format
+    data.append(struct.pack('I', SHFormats[sh_file_format])) # SH format
+    data.append(struct.pack('I', ColorFormats[color_format])) # Color format 
+    data.append(struct.pack('I', color_width)) # Color width
+    data.append(struct.pack('I', color_height)) # Color height
+    
+    # ---- Static data ----
+
+    static_info = ["chunks_static.bytes", "colors.bytes", "others.bytes", "shs.bytes"]
+
+    for info in static_info:
+        with open(os.path.join(basepath, info), 'rb') as f:
+            data.append(f.read())
+
+    # ---- Dynamic data ----
     
     # Read all the files intercalated
     for position_file in sorted(os.listdir(positions_path)):
@@ -221,7 +264,7 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
             data.append(f.read())
     
     # Write the data to a single file
-    file_name = os.path.join(os.path.dirname(basepath), "dynamic_data.bytes")
+    file_name = os.path.join(os.path.dirname(basepath), "scene.bytes")
 
     with open(file_name, 'wb') as f:
         for chunk in data:
@@ -254,5 +297,19 @@ def create_one_file_chunk_pos(basepath):
         for chunk in chunk_data:
             f2.write(chunk)
 
+def create_json(save_path, splat_count=0, chunk_count=0, pos_format='Norm11', save_interval=1, fps=30, frame_count=0):
+
+    metadata = {}
+
+    metadata["splat_count"] = splat_count
+    metadata["chunk_count"] = chunk_count
+    metadata["pos_format"] = pos_format
+    metadata["frame_time"] = save_interval * 1.0 / fps
+    metadata["frame_count"] = frame_count
+
+    with open(os.path.join(save_path, "metadata.json"), 'w') as f:
+        json.dump(metadata, f)
+
 if __name__=="__main__":
-    create_one_file_chunk_pos("output/cookie/render_unity/")
+    print("Testing")
+    create_one_file("output/cookie_beef_full/", splat_count=198233)
