@@ -1,12 +1,10 @@
 import os
 import cv2
 
-data_path = "data/dynerf/coffee_martini/"
+data_path = "data/dynerf/sear_steak/"
 
 # Create a VideoCapture object and read from input file
 cams = []
-
-# cam00 cam01 ... cam 20
 
 for i in range(21):
     name = data_path + "cam" + str(i).zfill(2) 
@@ -23,12 +21,14 @@ for i in range(21):
         print("Error opening video stream or file")
     
     # Read until video is completed
+    j = 0
     while True:
         ret, frame = cam.read()
 
         if ret == True:
             frame = cv2.resize(frame, (1352, 1014), interpolation=cv2.INTER_AREA)
-            cv2.imwrite(outpath + "/" + str(int(cam.get(cv2.CAP_PROP_POS_FRAMES))).zfill(4) + ".png", frame)
+            cv2.imwrite(outpath + "/" + str(j).zfill(4) + ".png", frame)
+            j += 1
         else:
             break
     
