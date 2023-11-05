@@ -11,7 +11,7 @@ SHFormats = {'Float32':0, 'Float16':1, 'Norm11':2, 'Norm6':3,
              'Cluster64k':4, 'Cluster32k':5, 'Cluster16k':6, 
              'Cluster8k':7, 'Cluster4k':8}
 
-ColorFormats = {'Float32':0, 'Float16':1, 'Norm8':2, 'BC7':3}
+ColorFormats = {'Float32x4':0, 'Float16x4':1, 'Norm8x4':2, 'BC7':3}
 
 def morton_part1by2(x):
     x &= 0x1fffff
@@ -132,16 +132,25 @@ def create_chunks(mean3d_in, scale, gaussianCount, chunk_size):
         
     return positions, scales, pos_chunks, scale_chunks
 
-def create_positions_asset(means3D_sorted, basepath, format='Norm11', idx=-1):
-    if idx == 0:
-        if os.path.exists(os.path.join(basepath, f"position_data.bytes")):
-            os.remove(os.path.join(basepath, f"position_data.bytes"))
+def create_positions_asset(means3D_sorted, basepath, format='Norm11', idx=-1, one_file=False):
+    if one_file:
+        if idx == 0:
+            if os.path.exists(os.path.join(basepath, f"position_data.bytes")):
+                os.remove(os.path.join(basepath, f"position_data.bytes"))
 
-    path = os.path.join(basepath, f"position_data.bytes")
+        path = os.path.join(basepath, f"position_data.bytes")
 
-    with open(path, 'ab') as f:
-        for mean3d in means3D_sorted:
-            f.write(encode_vector(mean3d, format))
+        with open(path, 'ab') as f:
+            for mean3d in means3D_sorted:
+                f.write(encode_vector(mean3d, format))
+    else:
+        output_folder = os.path.join(os.path.dirname(basepath), "positions")
+        os.makedirs(output_folder, exist_ok=True)
+        path = os.path.join(output_folder, f"{idx}.bytes")
+
+        with open(path, 'wb') as f:
+            for mean3d in means3D_sorted:
+                f.write(encode_vector(mean3d, format))
 
 def create_others_asset(rotations, scales, sh_index, basepath, scale_format, idx=0):
 
@@ -158,16 +167,23 @@ def f32tof16(f32):
     f16 = np.float16(f32)
     return f16.view(np.uint16)
 
-def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0):
-
-    path = os.path.join(basepath, f"chunk_data.bytes")
-    if idx == 0:
-        if os.path.exists(path):
-            os.remove(path)
+def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0, one_file=False):
 
     format_str = "ffffffIII"
+
+    if one_file:
+        path = os.path.join(basepath, f"chunk_data.bytes")
+        if idx == 0:
+            if os.path.exists(path):
+                os.remove(path)
+        mode = 'ab'
+    else:
+        output_folder = os.path.join(os.path.dirname(basepath), "chunks")
+        os.makedirs(output_folder, exist_ok=True)
+        path = os.path.join(output_folder, f"{idx}.bytes")
+        mode = 'wb'
     
-    with open(path, 'ab') as f:
+    with open(path, mode) as f:
         for pos_chunk, scale_chunk in zip(pos_chunks, scale_chunks):
             # f32 -> f16
             sclX = f32tof16(scale_chunk[0][0]) | (f32tof16(scale_chunk[1][0]) << 16)
@@ -216,8 +232,8 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
     # 2- Static data
     # 3- Dynamic data, intercalated positions and chunks
 
-    positions_path = os.path.join(os.path.dirname(basepath), "positions")
-    chunks_path = os.path.join(os.path.dirname(basepath), "chunks")
+    positions_path = os.path.join(basepath, "positions")
+    chunks_path = os.path.join(basepath, "chunks")
     
     data = []
     
@@ -244,15 +260,17 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
     data.append(struct.pack('I', ColorFormats[color_format])) # Color format 
     data.append(struct.pack('I', color_width)) # Color width
     data.append(struct.pack('I', color_height)) # Color height
+
+    static_info = ["chunk_static.bytes", "colors.bytes", "others.bytes", "shs.bytes"]
     
     # ---- Static data ----
-
-    static_info = ["chunks_static.bytes", "colors.bytes", "others.bytes", "shs.bytes"]
-
+    
     for info in static_info:
         with open(os.path.join(basepath, info), 'rb') as f:
+            size = os.path.getsize(os.path.join(basepath, info))
+            data.append(struct.pack('I', size))
             data.append(f.read())
-
+    
     # ---- Dynamic data ----
     
     # Read all the files intercalated
@@ -312,4 +330,4 @@ def create_json(save_path, splat_count=0, chunk_count=0, pos_format='Norm11', sa
 
 if __name__=="__main__":
     print("Testing")
-    create_one_file("output/cookie_beef_full/", splat_count=198233)
+    create_one_file("output/martini/cut_beef_newformat", splat_count=298081)

@@ -33,6 +33,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline):
     order = get_order(gaussians.get_xyz)
 
     idx2= 0
+
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:
             time1 = time()
@@ -69,7 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--skip_video", action="store_true")
-    parser.add_argument("--save_interval", default=1)
+    parser.add_argument("--save_interval", default=5)
     parser.add_argument("--configs", type=str, default="arguments/dynerf/default.py")
     parser.add_argument("--pos-format", type=str, default="Norm11")
     parser.add_argument("--chunk-size", type=int, default=256)
@@ -77,7 +78,7 @@ if __name__ == "__main__":
 
     args = get_combined_args(parser)
     
-    args.model_path = "output/dynerf/cut_roasted_beef/"
+    args.model_path = "output/martini/"
     print("Rendering " , args.model_path)
     if args.configs:
         import mmcv
