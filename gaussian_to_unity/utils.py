@@ -274,6 +274,12 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
     # ---- Dynamic data ----
     
     # Read all the files intercalated
+    pos_size = os.path.getsize(os.path.join(positions_path, os.listdir(positions_path)[0]))
+    data.append(struct.pack('I', pos_size))
+
+    chunk_size = os.path.getsize(os.path.join(chunks_path, os.listdir(chunks_path)[0]))
+    data.append(struct.pack('I', chunk_size))
+    
     for position_file in sorted(os.listdir(positions_path)):
         with open(os.path.join(positions_path, position_file), 'rb') as f:
             data.append(f.read())
