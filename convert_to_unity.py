@@ -27,7 +27,7 @@ to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
 def render_set(model_path, name, iteration, views, gaussians, pipeline):
     
-    save_path = os.path.join(model_path, "cut_beef_newformat/")
+    save_path = os.path.join(model_path, "unity_format/")
     makedirs(save_path, exist_ok=True)
     
     order = get_order(gaussians.get_xyz)
@@ -47,7 +47,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline):
     chunk_count = (splat_count+args.chunk_size-1) // args.chunk_size
     
     #create_json(save_path, splat_count, chunk_count, args.pos_format, args.save_interval, args.fps, len(views))
-    create_one_file(save_path, pos_file_format=args.pos_format, splat_count=splat_count, chunk_count=chunk_count, frame_time=1/args.fps)
+    create_one_file(save_path, pos_file_format=args.pos_format, splat_count=splat_count, chunk_count=chunk_count, frame_time=args.save_interval/args.fps)
 
     time2=time()
     print("FPS:",(len(views)-1)/(time2-time1))
@@ -74,11 +74,11 @@ if __name__ == "__main__":
     parser.add_argument("--configs", type=str, default="arguments/dynerf/default.py")
     parser.add_argument("--pos-format", type=str, default="Norm11")
     parser.add_argument("--chunk-size", type=int, default=256)
-    parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument("--fps", type=int, default=20)
 
     args = get_combined_args(parser)
     
-    args.model_path = "output/martini/"
+    args.model_path = "output/sear_steak/"
     print("Rendering " , args.model_path)
     if args.configs:
         import mmcv
