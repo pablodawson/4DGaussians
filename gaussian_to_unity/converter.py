@@ -54,4 +54,6 @@ def gaussian_timestep_to_unity(means3d: torch.tensor,
 
     if debug:
         print("create_chunks_asset time:", tm.time()-timestart)
+
+def static_data_to_unity(scales: torch.tensor, rotations: torch.tensor, order_indexes: np.array):
     

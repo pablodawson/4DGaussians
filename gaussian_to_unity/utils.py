@@ -225,6 +225,11 @@ def linealize(rot, scale):
 
     return rot, scale
 
+# Define a custom sorting key
+def sort_key(filename):
+    # Remove the '.bytes' extension and convert the remaining string to an integer
+    return int(filename.replace('.bytes', ''))
+
 def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_count=0, frame_time=1/20):
 
     # Current format
@@ -245,7 +250,7 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
     sh_file_format= "Norm6"
     color_format = "Norm8x4"
     color_width = 2048
-    color_height = 112
+    color_height = 95
 
     frame_count = len(os.listdir(positions_path))
 
@@ -280,10 +285,10 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
     chunk_size = os.path.getsize(os.path.join(chunks_path, os.listdir(chunks_path)[0]))
     data.append(struct.pack('I', chunk_size))
     
-    for position_file in sorted(os.listdir(positions_path)):
+    for position_file in sorted(os.listdir(positions_path), key=sort_key):
         with open(os.path.join(positions_path, position_file), 'rb') as f:
             data.append(f.read())
-
+    
         with open(os.path.join(chunks_path, position_file), 'rb') as f:
             data.append(f.read())
     
@@ -336,4 +341,4 @@ def create_json(save_path, splat_count=0, chunk_count=0, pos_format='Norm11', sa
 
 if __name__=="__main__":
     print("Testing")
-    create_one_file("output/martini/cut_beef_newformat", splat_count=298081)
+    create_one_file("output/gym/unity_format", splat_count=298081)

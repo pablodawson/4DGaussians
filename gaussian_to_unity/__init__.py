@@ -15,7 +15,7 @@ from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianR
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 from gaussian_to_unity.utils import *
-from gaussian_to_unity.converter import gaussian_timestep_to_unity
+from gaussian_to_unity.converter import gaussian_timestep_to_unity, static_data_to_unity
 import time as tm
 
 
@@ -69,6 +69,8 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
     means3D_final[~deformation_point] = means3D[~deformation_point]
     rotations_final[~deformation_point] = rotations[~deformation_point]
     scales_final[~deformation_point] = scales[~deformation_point]
+    
+    
     
     # Create Unity compatible frames for each gaussian state (only position at the moment)
     gaussian_timestep_to_unity(means3D_final, scales_final, rotations_final, order_indexes, debug=True, 

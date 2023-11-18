@@ -70,7 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--skip_video", action="store_true")
-    parser.add_argument("--save_interval", default=5)
+    parser.add_argument("--save_interval", default=1, type=int)
     parser.add_argument("--configs", type=str, default="arguments/dynerf/default.py")
     parser.add_argument("--pos-format", type=str, default="Norm11")
     parser.add_argument("--chunk-size", type=int, default=256)
@@ -78,7 +78,6 @@ if __name__ == "__main__":
 
     args = get_combined_args(parser)
     
-    args.model_path = "output/sear_steak/"
     print("Rendering " , args.model_path)
     if args.configs:
         import mmcv
