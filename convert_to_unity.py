@@ -16,7 +16,7 @@ from tqdm import tqdm
 from os import makedirs
 from gaussian_to_unity import save_frame
 from gaussian_to_unity.converter import get_order
-from gaussian_to_unity.utils import create_one_file, create_one_file_chunk_pos, create_json
+from gaussian_to_unity.utils import create_one_file, create_one_file_chunk_pos
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args, ModelHiddenParams
@@ -34,12 +34,12 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline):
 
     idx2= 0
 
-    for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
+    for idx, view in enumerate(tqdm(views, desc="Conversion progress")):
         if idx == 0:
             time1 = time()
         if (idx % args.save_interval) == 0:
+            save_frame(view, gaussians, pipeline, order_indexes=order, basepath=save_path, idx=idx2, args=args)
             idx2+=1
-            save_frame(view, gaussians, pipeline, order_indexes=order, basepath=save_path, idx=idx2, pos_format=args.pos_format)
     
     # Create json with metadata
 
@@ -47,7 +47,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline):
     chunk_count = (splat_count+args.chunk_size-1) // args.chunk_size
     
     #create_json(save_path, splat_count, chunk_count, args.pos_format, args.save_interval, args.fps, len(views))
-    create_one_file(save_path, pos_file_format=args.pos_format, splat_count=splat_count, chunk_count=chunk_count, frame_time=args.save_interval/args.fps)
+    create_one_file(save_path, splat_count=splat_count, chunk_count=chunk_count, frame_time=args.save_interval/args.fps, args=args)
 
     time2=time()
     print("FPS:",(len(views)-1)/(time2-time1))
@@ -70,11 +70,16 @@ if __name__ == "__main__":
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--skip_video", action="store_true")
-    parser.add_argument("--save_interval", default=1, type=int)
-    parser.add_argument("--configs", type=str, default="arguments/dynerf/default.py")
-    parser.add_argument("--pos-format", type=str, default="Norm11")
+    parser.add_argument("--configs", type=str, default="arguments/hypernerf/default.py")
+    
+    parser.add_argument("--save_interval", default=7, type=int)
     parser.add_argument("--chunk-size", type=int, default=256)
     parser.add_argument("--fps", type=int, default=20)
+    
+    parser.add_argument("--pos-format", type=str, default="Norm11")
+    parser.add_argument("--scale_format", type=str, default="Norm11")
+    parser.add_argument("--sh_format", type=str, default="Norm6")
+    parser.add_argument("--col_format", type=str, default="Norm8x4")
 
     args = get_combined_args(parser)
     

@@ -2,6 +2,7 @@ import numpy as np
 import struct
 import os
 import json
+from sklearn.cluster import KMeans
 
 kScaler = (1 << 21) - 1
 
@@ -12,6 +13,34 @@ SHFormats = {'Float32':0, 'Float16':1, 'Norm11':2, 'Norm6':3,
              'Cluster8k':7, 'Cluster4k':8}
 
 ColorFormats = {'Float32x4':0, 'Float16x4':1, 'Norm8x4':2, 'BC7':3}
+
+sh_format_size = {'Float32': -1,
+        'Float16': -1,
+        'Norm11': -1,
+        'Norm6': -1,
+        'Cluster64k': 64 * 1024,
+        'Cluster32k': 32 * 1024,
+        'Cluster16k': 16 * 1024,
+        'Cluster8k': 8 * 1024,
+        'Cluster4k': 4 * 1024,
+    }
+
+passes_over_data = {
+        'Cluster64k': 0.3,
+        'Cluster32k': 0.4,
+        'Cluster16k': 0.5,
+        'Cluster8k': 0.8,
+        'Cluster4k': 1.2,
+    }
+
+sh_format_to_numpy = {'Float16': np.float16,
+                      'Float32': np.float32,
+                      'Norm11': np.uint32,
+                      'Norm6': np.uint16}
+
+kTextureWidth = 2048
+kShDim = 15 * 3
+kBatchSize = 2048
 
 def morton_part1by2(x):
     x &= 0x1fffff
@@ -40,98 +69,129 @@ def reorder_morton_job(bounds_min, inv_bounds_size, splat_data):
 
     #return order
 
-def calculate_bounds(pos):
-    mins = np.min(pos, axis=0)
-    maxs = np.max(pos, axis=0)
-    return mins, maxs
-
 def encode_float3_to_norm16(v):
-    x = int(v[0] * 65535.5)
-    y = int(v[1] * 65535.5)
-    z = int(v[2] * 65535.5)
+    x = (v[:, 0] * 65535.5).astype(np.uint64)
+    y = (v[:, 1] * 65535.5).astype(np.uint64)
+    z = (v[:, 2] * 65535.5).astype(np.uint64)
     return x | (y << 16) | (z << 32)
 
 def encode_float3_to_norm11(v):
-    x = int(v[0] * 2047.5)
-    y = int(v[1] * 1023.5)
-    z = int(v[2] * 2047.5)
-    return x | (y << 11) | (z << 21)
+    x = (v[:, 0] * 2047.5).astype(np.uint32)
+    y = (v[:, 1] * 1023.5).astype(np.uint32)
+    z = (v[:, 2] * 2047.5).astype(np.uint32)
+    return (x | (y << 11) | (z << 21))
 
 def encode_float3_to_norm655(v):
-    x = int(v[0] * 63.5)
-    y = int(v[1] * 31.5)
-    z = int(v[2] * 31.5)
-    return x | (y << 6) | (z << 11)
+    x = (v[:,0] * 63.5).astype(np.uint32)
+    y = (v[:,1] * 31.5).astype(np.uint32)
+    z = (v[:,2] * 31.5).astype(np.uint32)
+    return (x | (y << 6) | (z << 11)).astype(np.uint16)
 
 def encode_float3_to_norm565(v):
-    x = int(v[0] * 31.5)
-    y = int(v[1] * 63.5)
-    z = int(v[2] * 31.5)
-    return x | (y << 5) | (z << 11)
+    x = (v[:,0] * 31.5).astype(np.uint32)
+    y = (v[:,1] * 63.5).astype(np.uint32)
+    z = (v[:,2] * 31.5).astype(np.uint32)
+    return (x | (y << 5) | (z << 11)).astype(np.uint16)
 
 def encode_quat_to_norm10(v):
-    x = int(v[0] * 1023.5)
-    y = int(v[1] * 1023.5)
-    z = int(v[2] * 1023.5)
-    w = int(v[3] * 3.5)
-    return x | (y << 10) | (z << 20) | (w << 30)
+    x = (v[:,0] * 1023.5).astype(np.uint64)
+    y = (v[:,1] * 1023.5).astype(np.uint64)
+    z = (v[:,2] * 1023.5).astype(np.uint64)
+    w = (v[:,3] * 3.5).astype(np.uint64)
+    return (x | (y << 10) | (z << 20) | (w << 30)).astype(np.uint32)
 
 def encode_vector(v, vector_format):
     v = np.clip(v, 0, 1)
     
     if vector_format == "Float32":
-        return struct.pack('fff', v[0], v[1], v[2])
+        v = v.astype(np.float32)
+        return v
         
     elif vector_format == "Norm16":
         enc = encode_float3_to_norm16(v)
-        low_bits = enc & 0xFFFFFFFF
-        high_bits = enc >> 32
-        return struct.pack('IH', low_bits, high_bits)
-
+        low_bits = (enc & 0xFFFFFFFF).astype(np.uint32)
+        high_bits = (enc >> 32).astype(np.uint16)
+        return np.core.records.fromarrays([low_bits, high_bits], 
+                                  names='low_bits,high_bits', 
+                                  formats = 'I,H')
     elif vector_format == "Norm11":
         enc = encode_float3_to_norm11(v)
-        return struct.pack('I', enc)
+        return enc
 
     elif vector_format == "Norm6":
         enc = encode_float3_to_norm655(v)
-        return struct.pack('H', enc)
+        return enc
+    
+    elif vector_format == "Norm565":
+        enc = encode_float3_to_norm565(v)
+        return enc
     
     elif vector_format == "Norm10":
         enc = encode_quat_to_norm10(v)
-        return struct.pack('I', enc)
+        return enc
     
     else:
         raise ValueError(f"Unknown vector format: {vector_format}")
 
-def encode_quat_to_norm10(v):
-    return int(v[0] * 1023.5) | (int(v[1] * 1023.5) << 10) | (int(v[2] * 1023.5) << 20) | (int(v[3] * 3.5) << 30)
 
-def normalize_chunk(chunk):
-    bounds_min, bounds_max = calculate_bounds(chunk)
-    normalized_chunk = (chunk - bounds_min) / (bounds_max - bounds_min + 1e-6)
-    return normalized_chunk, bounds_min, bounds_max
+def normalize_sh_chunks(chunks):
 
-def create_chunks(mean3d_in, scale, gaussianCount, chunk_size):
+    bounds_max = np.max(chunks, axis=(1, 2))
+    bounds_min = np.min(chunks, axis=(1, 2))
+
+    bounds_max_expanded = bounds_max[:, np.newaxis, np.newaxis, :]
+    bounds_min_expanded = bounds_min[:, np.newaxis, np.newaxis, :]
+
+    # Normalize
+    normalized = (chunks - bounds_min_expanded) / (bounds_max_expanded - bounds_min_expanded)
+
+    # Compute chunk bounds
+    chunk_bounds = np.column_stack((bounds_min_expanded, bounds_max_expanded))
+
+    return normalized, chunk_bounds
+
+
+def normalize_chunks(chunks):
+    bounds_min = np.min(chunks, axis=1)
+    bounds_max = np.max(chunks, axis=1)
+
+    bounds_min_expanded = bounds_min[:, np.newaxis, :]
+    bounds_max_expanded = bounds_max[:, np.newaxis, :]
+
+    normalized = (chunks - bounds_min_expanded) / (bounds_max_expanded - bounds_min_expanded)
+
+    chunk_bounds = np.column_stack((bounds_min_expanded, bounds_max_expanded))
+
+    return normalized, chunk_bounds
+
+#bien
+def create_chunks(data_in, gaussianCount, chunk_size, sh=False):
     
-    pos_chunks = []
-    scale_chunks = []
+    n_chunks = gaussianCount // chunk_size
+    pad_size = gaussianCount - n_chunks * chunk_size
+    
+    if (not sh):
+        chunks_array = data_in[:n_chunks * chunk_size].reshape(-1, chunk_size, data_in.shape[1])
+        normalized, chunk_bounds = normalize_chunks(chunks_array)
+        normalized = normalized.reshape(-1, data_in.shape[1])
+        padding = np.zeros((pad_size, data_in.shape[1]), dtype=np.float32)
 
-    positions = np.zeros((gaussianCount, 3), dtype=np.float32)
-    scales = np.zeros((gaussianCount, 3), dtype=np.float32)
+    else:
+        chunks_array = data_in[:n_chunks * chunk_size].reshape(-1, chunk_size, data_in.shape[1], data_in.shape[2])
+        normalized, chunk_bounds = normalize_sh_chunks(chunks_array)
+        normalized = normalized.reshape(-1, data_in.shape[1], data_in.shape[2])
+        padding = np.zeros((pad_size, data_in.shape[1], data_in.shape[2]), dtype=np.float32)
+    
+    normalized = np.concatenate((normalized, padding), axis=0)
 
-    for i in range(0, gaussianCount, chunk_size):
-        
-        chunk_pos = mean3d_in[i:i+chunk_size].copy()
-        chunk_scale = scale[i:i+chunk_size].copy()
-        
-        positions[i:i+chunk_size], min_pos, max_pos = normalize_chunk(chunk_pos)
-        scales[i:i+chunk_size], min_scale, max_scale = normalize_chunk(chunk_scale)
+    return normalized, chunk_bounds
 
-        pos_chunks.append([min_pos, max_pos])
-        scale_chunks.append([min_scale, max_scale])
-        
-    return positions, scales, pos_chunks, scale_chunks
+def calculate_bounds(data):
+    mins = np.min(data, axis=0)
+    maxs = np.max(data, axis=0)
+    return mins, maxs
 
+# Un poco distinta a Unity
 def create_positions_asset(means3D_sorted, basepath, format='Norm11', idx=-1, one_file=False):
     if one_file:
         if idx == 0:
@@ -142,77 +202,134 @@ def create_positions_asset(means3D_sorted, basepath, format='Norm11', idx=-1, on
 
         with open(path, 'ab') as f:
             for mean3d in means3D_sorted:
-                f.write(encode_vector(mean3d, format))
+                f.write(encode_vector(means3D_sorted, format).tobytes())
     else:
         output_folder = os.path.join(os.path.dirname(basepath), "positions")
         os.makedirs(output_folder, exist_ok=True)
         path = os.path.join(output_folder, f"{idx}.bytes")
 
         with open(path, 'wb') as f:
-            for mean3d in means3D_sorted:
-                f.write(encode_vector(mean3d, format))
+            f.write(encode_vector(means3D_sorted, format).tobytes())
 
-def create_others_asset(rotations, scales, sh_index, basepath, scale_format, idx=0):
-
-    output_folder = os.path.join(os.path.dirname(basepath), "others")
-    os.makedirs(output_folder, exist_ok=True)
-    path = os.path.join(output_folder, f"{idx}.bytes")
-
-    with open(path, 'ab') as f:
-        for rotation, scale in zip(rotations, scales):
-            f.write(encode_vector(rotation, "Norm10"))
-            f.write(encode_vector(scale, scale_format))
 
 def f32tof16(f32):
     f16 = np.float16(f32)
     return f16.view(np.uint16)
 
-def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0, one_file=False):
+def create_others_asset(rotations, scales, basepath, scale_format, idx=-1):
 
-    format_str = "ffffffIII"
+    if idx == -1:
+        path = os.path.join(basepath, f"others.bytes")
+        if os.path.exists(path):
+            os.remove(path)
+    else:
+        output_folder = os.path.join(os.path.dirname(basepath), "others")
+        os.makedirs(output_folder, exist_ok=True)
+        path = os.path.join(output_folder, f"{idx}.bytes")
+
+    with open(path, 'ab') as f:
+
+        encoded_rotations = encode_vector(rotations, "Norm10")
+        encoded_scales = encode_vector(scales, scale_format)
+        
+        interleaved = np.empty((encoded_rotations.size + encoded_scales.size,), dtype=encoded_rotations.dtype)
+        
+        # Interleave the data
+        interleaved[::2] = encoded_rotations
+        interleaved[1::2] = encoded_scales
+
+        f.write(interleaved.tobytes())
+
+def f32tof16(f32):
+    f16 = np.float16(f32)
+    return f16.view(np.uint16).astype(np.uint32)
+
+def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0, one_file=False):
 
     if one_file:
         path = os.path.join(basepath, f"chunk_data.bytes")
-        if idx == 0:
-            if os.path.exists(path):
-                os.remove(path)
-        mode = 'ab'
+        mode = 'ab' if idx > 0 else 'wb'
     else:
         output_folder = os.path.join(os.path.dirname(basepath), "chunks")
         os.makedirs(output_folder, exist_ok=True)
         path = os.path.join(output_folder, f"{idx}.bytes")
         mode = 'wb'
     
-    with open(path, mode) as f:
-        for pos_chunk, scale_chunk in zip(pos_chunks, scale_chunks):
-            # f32 -> f16
-            sclX = f32tof16(scale_chunk[0][0]) | (f32tof16(scale_chunk[1][0]) << 16)
-            sclY = f32tof16(scale_chunk[0][1]) | (f32tof16(scale_chunk[1][1]) << 16)
-            sclZ = f32tof16(scale_chunk[0][2]) | (f32tof16(scale_chunk[1][2]) << 16)
-
-                        
-            packed_data = struct.pack(format_str,
-                    pos_chunk[0][0], pos_chunk[1][0], pos_chunk[0][1], pos_chunk[1][1], pos_chunk[0][2], pos_chunk[1][2], 
-                    sclX, sclY, sclZ)
-            
-            f.write(packed_data)
+    sclX = (f32tof16(scale_chunks[:, 0, 0]) | (f32tof16(scale_chunks[:, 1, 0]) << 16)).view(np.float32)
+    sclY = (f32tof16(scale_chunks[:, 0, 1]) | (f32tof16(scale_chunks[:, 1, 1]) << 16)).view(np.float32)
+    sclZ = (f32tof16(scale_chunks[:, 0, 2]) | (f32tof16(scale_chunks[:, 1, 2]) << 16)).view(np.float32)
     
-def normalize_swizzle_rotation(wxyz):
-    return np.roll(np.array(wxyz / np.linalg.norm(wxyz)), -1)
+    # Packing data
+    packed_data = np.column_stack((pos_chunks[:, 0, :], pos_chunks[:, 1, :], sclX[:, None], sclY[:, None], sclZ[:, None]))
 
-# e1 e2 e3 e4
+    # Write to file
+    with open(path, mode) as f:
+        f.write(packed_data.tobytes())
+
+
+def create_chunks_static_asset(col_chunks, shs_chunks, basepath):
+
+    path = os.path.join(basepath, "chunks_static.bytes")
+    if os.path.exists(path):
+        os.remove(path)
+    mode = 'ab'
+    
+    colR = f32tof16(col_chunks[:, 0, 0]) | (f32tof16(col_chunks[:, 1, 0]) << 16)
+    colG = f32tof16(col_chunks[:, 0, 1]) | (f32tof16(col_chunks[:, 1, 1]) << 16)
+    colB = f32tof16(col_chunks[:, 0, 2]) | (f32tof16(col_chunks[:, 1, 2]) << 16)
+    colA = f32tof16(col_chunks[:, 0, 3]) | (f32tof16(col_chunks[:, 1, 3]) << 16)
+
+    shR = f32tof16(shs_chunks[:, 0, 0]) | (f32tof16(shs_chunks[:, 1, 0]) << 16)
+    shG = f32tof16(shs_chunks[:, 0, 1]) | (f32tof16(shs_chunks[:, 1, 1]) << 16)
+    shB = f32tof16(shs_chunks[:, 0, 2]) | (f32tof16(shs_chunks[:, 1, 2]) << 16)
+
+    packed_data = np.dstack((colR, colG, colB, colA, shR, shG, shB))
+    
+    with open(path, mode) as f:
+        f.write(packed_data.tobytes())
+
+def normalize_swizzle_rotation(wxyz):
+    normalized = np.divide(wxyz,np.linalg.norm(wxyz, axis=1).reshape(-1, 1))
+    normalized = np.roll(normalized, -1)
+    return normalized
+
 def pack_smallest_3_rotation(q):
     abs_q = np.abs(q)
     index = np.argmax(abs_q, axis=1)
-    q_rolled = np.roll(q, -index-1, axis=1)
+    n = q.shape[1]
+    rolled_indices = np.zeros((q.shape[0], n), dtype=np.int32)
+
+    rolled_indices[index == 0, :] = [1, 2, 3, 0]
+    rolled_indices[index == 1, :] = [0, 2, 3, 1]
+    rolled_indices[index == 2, :] = [0, 1, 3, 2]
+    rolled_indices[index == 3, :] = [0, 1, 2, 3]
+
+    q_rolled = q[np.arange(q.shape[0])[:, np.newaxis], rolled_indices]
     signs = np.sign(q_rolled[:, 3])
     three = q_rolled[:, :3] * signs[:, np.newaxis]
     three = (three * np.sqrt(2)) * 0.5 + 0.5
     index = index / 3.0
-    return np.column_stack((three, index)) 
+
+    return np.column_stack((three, index))
+
+def pack_smallest_3_rotation_3(q):
+    abs_q = np.abs(q)
+    index = np.argmax(abs_q, axis=1)
+    q_rolled = np.empty_like(q)
+    for i, shift in enumerate(index):
+        q_rolled[i] = np.roll(q[i], -shift-1)
+    signs = np.sign(q_rolled[:, 3])
+    three = q_rolled[:, :3] * signs[:, np.newaxis]
+    three = (three * np.sqrt(2)) * 0.5 + 0.5
+    index = index / 3.0
+    return np.column_stack((three, index))
 
 def linear_scale(log_scale):
     return np.abs(np.exp(log_scale))
+
+def sh0_to_color(dc0):
+    kSH_C0 = 0.2820948
+    return dc0 * kSH_C0 + 0.5
 
 def linealize(rot, scale):
     # Rotation processing
@@ -230,7 +347,7 @@ def sort_key(filename):
     # Remove the '.bytes' extension and convert the remaining string to an integer
     return int(filename.replace('.bytes', ''))
 
-def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_count=0, frame_time=1/20):
+def create_one_file(basepath, splat_count=0, chunk_count=0, frame_time=1/20, args=None):
 
     # Current format
     # 1- Metadata
@@ -246,11 +363,8 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
 
     # For now this is comes from Unity, hence the hardcoding
     format_version = 20231006
-    scale_file_format = "Norm11"
-    sh_file_format= "Norm6"
-    color_format = "Norm8x4"
-    color_width = 2048
-    color_height = 95
+
+    color_width, color_height = calc_texture_size(splat_count)
 
     frame_count = len(os.listdir(positions_path))
 
@@ -259,14 +373,14 @@ def create_one_file(basepath, pos_file_format="Norm11", splat_count=0, chunk_cou
     data.append(struct.pack('f', frame_time)) # Frame time
     data.append(struct.pack('I', frame_count)) # Frame count
     data.append(struct.pack('I', chunk_count)) # Chunk count
-    data.append(struct.pack('I', VectorFormats[pos_file_format])) # Position format
-    data.append(struct.pack('I', VectorFormats[scale_file_format])) # Scale format
-    data.append(struct.pack('I', SHFormats[sh_file_format])) # SH format
-    data.append(struct.pack('I', ColorFormats[color_format])) # Color format 
+    data.append(struct.pack('I', VectorFormats[args.pos_format])) # Position format
+    data.append(struct.pack('I', VectorFormats[args.scale_format])) # Scale format
+    data.append(struct.pack('I', SHFormats[args.sh_format])) # SH format
+    data.append(struct.pack('I', ColorFormats[args.col_format])) # Color format 
     data.append(struct.pack('I', color_width)) # Color width
     data.append(struct.pack('I', color_height)) # Color height
 
-    static_info = ["chunk_static.bytes", "colors.bytes", "others.bytes", "shs.bytes"]
+    static_info = ["chunks_static.bytes", "colors.bytes", "others.bytes", "shs.bytes"]
     
     # ---- Static data ----
     
@@ -326,19 +440,129 @@ def create_one_file_chunk_pos(basepath):
         for chunk in chunk_data:
             f2.write(chunk)
 
-def create_json(save_path, splat_count=0, chunk_count=0, pos_format='Norm11', save_interval=1, fps=30, frame_count=0):
+# Color utils
+def decode_morton2D_16x16(t):
+    t = (t & 0xFF) | ((t & 0xFE) << 7)
+    t &= 0x5555
+    t = (t ^ (t >> 1)) & 0x3333
+    t = (t ^ (t >> 2)) & 0x0f0f
+    return t & 0xF, t >> 8
 
-    metadata = {}
+def splat_index_to_texture_index(idx):
+    xy = decode_morton2D_16x16(idx)
+    width = kTextureWidth // 16
+    idx >>= 8
+    x = (idx % width) * 16 + xy[0]
+    y = (idx // width) * 16 + xy[1]
+    return y * kTextureWidth + x
 
-    metadata["splat_count"] = splat_count
-    metadata["chunk_count"] = chunk_count
-    metadata["pos_format"] = pos_format
-    metadata["frame_time"] = save_interval * 1.0 / fps
-    metadata["frame_count"] = frame_count
+def calc_texture_size(splat_count):
+    height =  (splat_count + kTextureWidth -1) // kTextureWidth
+    blockHeight = 16
+    height = (height + blockHeight - 1) // blockHeight * blockHeight
 
-    with open(os.path.join(save_path, "metadata.json"), 'w') as f:
-        json.dump(metadata, f)
+    return kTextureWidth, height
+
+
+def encode_color(v, color_format):
+    v = np.clip(v, 0, 1)
+
+    if color_format == "Float32x4":
+        return v.astype(np.float32)
+
+    elif color_format == "Float16x4":
+        return v.astype(np.float16)
+
+    elif color_format == "Norm8x4":
+        v = (v * 255.5).astype(np.uint32)
+        enc = v[:, 0] | (v[:, 1] << 8) | (v[:, 2] << 16) | (v[:, 3] << 24)
+        return enc
+
+
+def create_colors_asset(splat_count, col, basepath="/", color_format="Norm8x4"):
+
+    width, height = calc_texture_size(splat_count)
+
+    data = np.zeros((height * width, 4), dtype=np.float32)
+
+    idx = np.linspace(0, splat_count - 1, splat_count).astype(np.uint32)
+    morton_idx = splat_index_to_texture_index(idx.copy())
+
+    col_ref = col.copy()
+    # reorder and to numpy
+    data[morton_idx] = col_ref[idx]
+    
+    file_name = os.path.join(basepath, "colors.bytes")
+    
+    if os.path.exists(file_name):
+        os.remove(file_name)
+
+    encoded_data = encode_color(data, color_format).tobytes()
+
+    with open(file_name, 'wb') as f:
+        f.write(encoded_data)
+
+
+def cluster_shs(shs, sh_format="Norm6"):
+
+    sh_count = sh_format_size[sh_format]
+
+    if sh_count == -1:
+        return shs, None
+
+    kmeans = KMeans(n_clusters=sh_count)
+    sh_indices = kmeans.fit_predict(shs)
+    sh_means = kmeans.cluster_centers_
+
+    return sh_means, sh_indices
+
+def create_sh_asset(splat_count, shs, sh_data_format="Norm6", basepath="/"):
+    
+    sh_count = sh_format_size[sh_data_format]
+
+    # For shs Norm6 is done as Norm565
+    if sh_data_format == 'Norm6':
+        sh_data_format = 'Norm565'
+
+    if sh_count == -1:
+        sh_count = splat_count
+
+    sh_len = shs.shape[1]
+
+    path = os.path.join(basepath, f"shs.bytes")
+
+    if os.path.exists(path):
+        os.remove(path)
+
+    if sh_data_format != "Norm11":
+        padding = np.zeros((shs.shape[0], 1 , 3), dtype=shs.dtype)
+        shs = np.concatenate((shs, padding), axis=1)
+    
+    shs = shs.reshape(-1, 3)
+    
+    encoded_shs = encode_vector(shs, sh_data_format)
+
+    with open(path, 'wb') as f:
+        f.write(encoded_shs.tobytes())
+    
+    
+def sigmoid(v):
+    return 1.0 / (1.0 + np.exp(-v))
+
+def square_centered01(x):
+    x -= 0.5
+    x *= x * np.sign(x)
+    return x * 2.0 + 0.5
+
+def linealize_colors(dc, opacity):
+    dc = sh0_to_color(dc)
+    opacity = square_centered01(sigmoid(opacity))
+    return dc, opacity
 
 if __name__=="__main__":
     print("Testing")
-    create_one_file("output/gym/unity_format", splat_count=298081)
+    import torch
+    shs = torch.rand(10000, 45)
+    cluster_shs(10000, shs)
+
+    #create_one_file("output/gym/unity_format", splat_count=298081)
