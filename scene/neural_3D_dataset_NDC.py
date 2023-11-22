@@ -368,7 +368,7 @@ class Neural3D_NDC_Dataset(Dataset):
     def __getitem__(self,index):
         img = Image.open(self.image_paths[index])
         img = img.resize(self.img_wh, Image.LANCZOS)
-
+        
         img = self.transform(img)
         return img, self.image_poses[index], self.image_times[index]
     def load_pose(self,index):

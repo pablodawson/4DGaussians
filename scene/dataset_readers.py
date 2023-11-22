@@ -415,7 +415,7 @@ def format_render_poses(poses,data_infos):
     return cameras
 
 
-def readdynerfInfo(datadir,use_bg_points,eval):
+def readdynerfInfo(datadir,use_bg_points,eval, num_images=-1):
     # loading all the data follow hexplane format
     ply_path = os.path.join(datadir, "points3d.ply")
 
