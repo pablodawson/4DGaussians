@@ -136,8 +136,8 @@ def encode_vector(v, vector_format):
 
 def normalize_sh_chunks(chunks):
 
-    bounds_max = np.max(chunks, axis=(1, 2))
-    bounds_min = np.min(chunks, axis=(1, 2))
+    bounds_max = np.max(chunks, axis=(1,2))
+    bounds_min = np.min(chunks, axis=(1,2))
 
     bounds_max_expanded = bounds_max[:, np.newaxis, np.newaxis, :]
     bounds_min_expanded = bounds_min[:, np.newaxis, np.newaxis, :]
@@ -149,6 +149,23 @@ def normalize_sh_chunks(chunks):
     chunk_bounds = np.column_stack((bounds_min_expanded, bounds_max_expanded))
 
     return normalized, chunk_bounds
+
+def normalize_sh(data_in):
+
+    bounds_max = np.max(data_in, axis=(0,1))
+    bounds_min = np.min(data_in, axis=(0,1))
+
+    bounds_max_expanded = bounds_max[np.newaxis, np.newaxis, :]
+    bounds_min_expanded = bounds_min[np.newaxis, np.newaxis, :]
+
+    # Normalize
+    normalized = (data_in - bounds_min_expanded) / (bounds_max_expanded - bounds_min_expanded)
+
+    # Compute chunk bounds
+    chunk_bounds = np.concatenate((bounds_min_expanded, bounds_max_expanded), axis=0)
+
+    return normalized, chunk_bounds
+
 
 
 def normalize_chunks(chunks):
@@ -164,25 +181,40 @@ def normalize_chunks(chunks):
 
     return normalized, chunk_bounds
 
-#bien
+def normalize(data):
+    min, max = calculate_bounds(data)
+    normalized = (data - min) / (max - min)
+    bounds = np.stack((min, max))
+
+    return normalized, bounds
+
 def create_chunks(data_in, gaussianCount, chunk_size, sh=False):
     
     n_chunks = gaussianCount // chunk_size
-    pad_size = gaussianCount - n_chunks * chunk_size
     
     if (not sh):
         chunks_array = data_in[:n_chunks * chunk_size].reshape(-1, chunk_size, data_in.shape[1])
         normalized, chunk_bounds = normalize_chunks(chunks_array)
         normalized = normalized.reshape(-1, data_in.shape[1])
-        padding = np.zeros((pad_size, data_in.shape[1]), dtype=np.float32)
+
+        # Include the rest of the data that does not fit in a chunk
+        remaining = data_in[n_chunks * chunk_size:].reshape(-1, data_in.shape[1])
+        remaining_norm, remaining_bounds = normalize(remaining)
+
+        normalized = np.concatenate((normalized, remaining_norm), axis=0)
+        chunk_bounds = np.concatenate((chunk_bounds, remaining_bounds[np.newaxis,:,:]), axis=0)
 
     else:
         chunks_array = data_in[:n_chunks * chunk_size].reshape(-1, chunk_size, data_in.shape[1], data_in.shape[2])
         normalized, chunk_bounds = normalize_sh_chunks(chunks_array)
         normalized = normalized.reshape(-1, data_in.shape[1], data_in.shape[2])
-        padding = np.zeros((pad_size, data_in.shape[1], data_in.shape[2]), dtype=np.float32)
     
-    normalized = np.concatenate((normalized, padding), axis=0)
+        # Include the rest of the data that does not fit in a chunk
+        remaining = data_in[n_chunks * chunk_size:].reshape(-1, data_in.shape[1], data_in.shape[2])
+        remaining_norm, remaining_bounds = normalize_sh(remaining)
+
+        normalized = np.concatenate((normalized, remaining_norm), axis=0)
+        chunk_bounds = np.concatenate((chunk_bounds, remaining_bounds[np.newaxis, :,:,:]), axis=0)
 
     return normalized, chunk_bounds
 
@@ -260,8 +292,8 @@ def create_chunks_asset(pos_chunks, scale_chunks, basepath, idx=0, one_file=Fals
     sclZ = (f32tof16(scale_chunks[:, 0, 2]) | (f32tof16(scale_chunks[:, 1, 2]) << 16)).view(np.float32)
     
     # Packing data
-    packed_data = np.column_stack((pos_chunks[:, 0, :], pos_chunks[:, 1, :], sclX[:, None], sclY[:, None], sclZ[:, None]))
-
+    packed_data = np.column_stack((pos_chunks[:, :, 0], pos_chunks[:, :, 1], pos_chunks[:, :, 2], sclX, sclY, sclZ))
+    
     # Write to file
     with open(path, mode) as f:
         f.write(packed_data.tobytes())
