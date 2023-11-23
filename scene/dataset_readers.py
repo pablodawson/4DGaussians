@@ -414,10 +414,22 @@ def format_render_poses(poses,data_infos):
                             time = time))
     return cameras
 
+# Define the data type for the structured array
+dt = np.dtype([
+    ('id', np.uint64),
+    ('xyz', np.float64, (3,)),
+    ('rgb', np.uint8, (3,)),
+    ('error', np.float64),
+    ('track', np.uint32, (2,)),
+])
 
 def readdynerfInfo(datadir,use_bg_points,eval, num_images=-1):
     # loading all the data follow hexplane format
     ply_path = os.path.join(datadir, "points3d.ply")
+    points_path = os.path.join(datadir, "points3D.bin")
+
+    with open(points_path, 'rb') as f:
+        points = np.fromfile(f, dt)
 
     from scene.neural_3D_dataset_NDC import Neural3D_NDC_Dataset
     train_dataset = Neural3D_NDC_Dataset(
@@ -444,21 +456,28 @@ def readdynerfInfo(datadir,use_bg_points,eval, num_images=-1):
     val_cam_infos = format_render_poses(test_dataset.val_poses,test_dataset)
     nerf_normalization = getNerfppNorm(train_cam_infos)
     # create pcd
-    # if not os.path.exists(ply_path):
-    # Since this data set has no colmap data, we start with random points
-    num_pts = 2000
-    print(f"Generating random point cloud ({num_pts})...")
-    threshold = 3
-    # xyz_max = np.array([1.5*threshold, 1.5*threshold, 1.5*threshold])
-    # xyz_min = np.array([-1.5*threshold, -1.5*threshold, -3*threshold])
-    xyz_max = np.array([1.5*threshold, 1.5*threshold, 1.5*threshold])
-    xyz_min = np.array([-1.5*threshold, -1.5*threshold, -1.5*threshold])
-    # We create random points inside the bounds of the synthetic Blender scenes
-    xyz = (np.random.random((num_pts, 3)))* (xyz_max-xyz_min) + xyz_min
-    print("point cloud initialization:",xyz.max(axis=0),xyz.min(axis=0))
-    shs = np.random.random((num_pts, 3)) / 255.0
-    pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
-    storePly(ply_path, xyz, SH2RGB(shs) * 255)
+    if not os.path.exists(ply_path):
+        if not os.path.exists(points_path):
+            # Since this data set has no colmap data, we start with random points
+            num_pts = 2000
+            print(f"Generating random point cloud ({num_pts})...")
+            threshold = 3
+            # xyz_max = np.array([1.5*threshold, 1.5*threshold, 1.5*threshold])
+            # xyz_min = np.array([-1.5*threshold, -1.5*threshold, -3*threshold])
+            xyz_max = np.array([1.5*threshold, 1.5*threshold, 1.5*threshold])
+            xyz_min = np.array([-1.5*threshold, -1.5*threshold, -1.5*threshold])
+            # We create random points inside the bounds of the synthetic Blender scenes
+            xyz = (np.random.random((num_pts, 3)))* (xyz_max-xyz_min) + xyz_min
+            print("point cloud initialization:",xyz.max(axis=0),xyz.min(axis=0))
+            shs = np.random.random((num_pts, 3)) / 255.0
+            pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
+            storePly(ply_path, xyz, SH2RGB(shs) * 255)
+        else:
+            print("Converting point3d.bin to .ply, will happen only the first time you open the scene.")
+            xyz = points["xyz"]
+            rgb = points["rgb"]
+            storePly(ply_path, xyz, rgb.astype(np.float64))
+    
     try:
         # xyz = np.load
         pcd = fetchPly(ply_path)
