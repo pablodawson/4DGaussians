@@ -16,8 +16,7 @@ def get_order(means3d: torch.tensor) -> np.array:
     return order_indexes
 
 # Convert the splats of a certain timestep to the Unity format. Each run appends a new frame to the asset.
-def gaussian_timestep_to_unity(pc,
-                            means3d: torch.tensor, 
+def gaussian_timestep_to_unity(means3d: torch.tensor, 
                                scales: torch.tensor, 
                                rotations: torch.tensor, 
                                order_indexes: np.array, 
@@ -51,9 +50,13 @@ def gaussian_timestep_to_unity(pc,
     timestart = tm.time()
 
     rotations_to_save, scales_linealized= linealize(rotations[order_indexes].cpu().numpy().copy(), 
-                                                scales[order_indexes].cpu().numpy().copy())    
-    scales_to_save, scale_chunks = create_chunks(scales_linealized, means3d.shape[0], chunkSize)
+                                                scales[order_indexes].cpu().numpy().copy())
     
+    global scale_chunks
+
+    if ((args.include_others) or idx == 0):
+        scales_to_save, scale_chunks = create_chunks(scales_linealized, means3d.shape[0], chunkSize)
+
     timestart = tm.time()
     create_chunks_asset(means_chunks, scale_chunks, basepath, idx= idx)
 
@@ -84,7 +87,7 @@ def gaussian_static_data_to_unity(splat_count: int,
         timestart = tm.time()
         rotations_to_save, scales_linealized= linealize(rotations[order_indexes].cpu().numpy().copy(), 
                                                     scales[order_indexes].cpu().numpy().copy())
-        scales_to_save, scale_chunks = create_chunks(scales_linealized, splat_count, chunkSize)
+        scales_to_save, _ = create_chunks(scales_linealized, splat_count, chunkSize)
 
         create_others_asset(rotations_to_save, scales_to_save, basepath, scale_format=args.scale_format)
 
@@ -99,7 +102,7 @@ def gaussian_static_data_to_unity(splat_count: int,
 
     timestart = tm.time()
     # Cluster shs
-    shs, indices = cluster_shs(shs, sh_format=args.sh_format)
+    shs, _ = cluster_shs(shs, sh_format=args.sh_format)
 
     # Linealize colors
     dc, opacity = linealize_colors(dc, opacity)
@@ -118,7 +121,7 @@ def gaussian_static_data_to_unity(splat_count: int,
 
     shs_chunks = shs_chunks.squeeze(2)
     print("create_chunks time:", tm.time()-timestart)
-
+    
     timestart = tm.time()
     create_colors_asset(splat_count, col_to_save, color_format=args.col_format, basepath=basepath)
     print("create_colors_asset time:", tm.time()-timestart)

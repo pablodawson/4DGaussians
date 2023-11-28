@@ -344,17 +344,6 @@ def pack_smallest_3_rotation(q):
 
     return np.column_stack((three, index))
 
-def pack_smallest_3_rotation_3(q):
-    abs_q = np.abs(q)
-    index = np.argmax(abs_q, axis=1)
-    q_rolled = np.empty_like(q)
-    for i, shift in enumerate(index):
-        q_rolled[i] = np.roll(q[i], -shift-1)
-    signs = np.sign(q_rolled[:, 3])
-    three = q_rolled[:, :3] * signs[:, np.newaxis]
-    three = (three * np.sqrt(2)) * 0.5 + 0.5
-    index = index / 3.0
-    return np.column_stack((three, index))
 
 def linear_scale(log_scale):
     return np.abs(np.exp(log_scale))
@@ -394,7 +383,6 @@ def create_one_file(basepath, splat_count=0, chunk_count=0, frame_time=1/20, arg
     
     # ---- Header information -----
 
-    # For now this is comes from Unity, hence the hardcoding
     format_version = 20231006
 
     color_width, color_height = calc_texture_size(splat_count)

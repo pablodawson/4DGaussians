@@ -72,7 +72,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip_video", action="store_true")
     parser.add_argument("--configs", type=str, default="arguments/hypernerf/default.py")
     
-    parser.add_argument("--save_interval", default=7, type=int)
+    parser.add_argument("--save_interval", default=1, type=int)
     parser.add_argument("--chunk-size", type=int, default=256)
     parser.add_argument("--fps", type=int, default=20)
     
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     parser.add_argument("--sh_format", type=str, default="Norm6")
     parser.add_argument("--col_format", type=str, default="Norm8x4")
 
-    parser.add_argument("--save_name", type=str, default="newww")
+    parser.add_argument("--save_name", type=str, default="corr")
     parser.add_argument("--include_others", action="store_true")
     
     args = get_combined_args(parser)

@@ -94,5 +94,5 @@ def save_frame(viewpoint_camera, pc : GaussianModel, pipe, scaling_modifier = 1.
                                       shs, opacity_deform, order_indexes, args= args, basepath=basepath)
     
     # Create Unity compatible frames for each gaussian state (only position at the moment)
-    gaussian_timestep_to_unity(pc, means3D_final, scales_final, rotations_final, order_indexes, debug=debug, 
+    gaussian_timestep_to_unity(means3D_final, scales_final, rotations_final, order_indexes, debug=debug, 
                                args=args, basepath=basepath, idx=idx)
