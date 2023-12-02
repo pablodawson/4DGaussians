@@ -31,6 +31,10 @@ from utils.scene_utils import render_training_image
 from time import time
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
+from icecream import ic
+from prune import prune_list
+
+
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -205,7 +209,24 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     print("reset opacity")
                     gaussians.reset_opacity()
-                    
+                
+                if iteration in opt.prune_iterations:
+                    ic("in prune")
+                    # TODO Add types
+
+                    gaussian_list, imp_list = prune_list(gaussians, scene, pipe, background)
+                    i = opt.prune_iterations.index(iteration)
+                    volume = torch.prod(gaussians.get_scaling, dim=1)
+                    index = int(len(volume) * 0.9)
+                    sorted_volume, sorted_indices = torch.sort(
+                        volume, descending=True, dim=0
+                    )
+                    kth_percent_largest = sorted_volume[index]
+                    v_list = torch.pow(volume / kth_percent_largest, opt.v_pow)
+                    v_list = v_list * imp_list
+                    gaussians.prune_gaussians(
+                        (opt.prune_decay**i) * opt.prune_percent, v_list
+                    )    
 
             # Optimizer step
             if iteration < opt.iterations:
