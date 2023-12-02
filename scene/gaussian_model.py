@@ -51,6 +51,8 @@ class GaussianModel:
         self._xyz = torch.empty(0)
         # self._deformation =  torch.empty(0)
         self._deformation = deform_network(args)
+        self.previous_mean3d = np.empty(0)
+        self.delta_bounds = []
         # self.grid = TriPlaneGrid()
         self._features_dc = torch.empty(0)
         self._features_rest = torch.empty(0)
@@ -66,6 +68,9 @@ class GaussianModel:
         self._deformation_table = torch.empty(0)
         self.setup_functions()
 
+    def append_delta_bounds(self, delta_bounds):
+        self.delta_bounds.append(delta_bounds)
+    
     def capture(self):
         return (
             self.active_sh_degree,

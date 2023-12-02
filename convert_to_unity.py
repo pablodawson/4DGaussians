@@ -81,6 +81,9 @@ if __name__ == "__main__":
     parser.add_argument("--sh_format", type=str, default="Norm6")
     parser.add_argument("--col_format", type=str, default="Norm8x4")
 
+    parser.add_argument("--save_name", type=str, default="newww")
+    parser.add_argument("--include_others", action="store_true")
+    
     args = get_combined_args(parser)
     
     print("Rendering " , args.model_path)
