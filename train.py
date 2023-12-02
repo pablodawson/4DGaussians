@@ -106,7 +106,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         else:
             idx = randint(0, len(viewpoint_stack)-1)
             viewpoint_cams = [viewpoint_stack[idx]]
-
+        
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
@@ -137,7 +137,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
         # norm
         
-
         loss = Ll1
         if stage == "fine" and hyper.time_smoothness_weight != 0:
             # tv_loss = 0
@@ -209,8 +208,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     print("reset opacity")
                     gaussians.reset_opacity()
-                
-                if iteration in opt.prune_iterations:
+
+            if iteration in opt.prune_iterations:
                     ic("in prune")
                     # TODO Add types
 
@@ -226,8 +225,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     v_list = v_list * imp_list
                     gaussians.prune_gaussians(
                         (opt.prune_decay**i) * opt.prune_percent, v_list
-                    )    
-
+                    )
             # Optimizer step
             if iteration < opt.iterations:
                 gaussians.optimizer.step()

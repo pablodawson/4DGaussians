@@ -30,7 +30,7 @@ import numpy as np
 from collections import defaultdict
 
 def prune_list(gaussians, scene, pipe, background):
-    viewpoint_stack = gaussians.getVideoCameras().copy()
+    viewpoint_stack = scene.video_camera.copy()
     gaussian_list, imp_list = None, None
     viewpoint_cam = viewpoint_stack.pop()
     render_pkg = count_render(viewpoint_cam, gaussians, pipe, background)
