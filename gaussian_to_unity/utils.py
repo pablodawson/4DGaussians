@@ -1,7 +1,7 @@
 import numpy as np
 import struct
 import os
-import json
+import torch
 from sklearn.cluster import KMeans
 
 kScaler = (1 << 21) - 1
@@ -401,6 +401,17 @@ def create_one_file(basepath, splat_count=0, chunk_count=0, frame_time=1/20, arg
     data.append(struct.pack('I', color_width)) # Color width
     data.append(struct.pack('I', color_height)) # Color height
     data.append(struct.pack('I', int(args.include_others))) # Include dynamic rotations and scaling
+    
+    # Transforms
+    data.append(struct.pack('f', args.pos_offset[0])) # Position offset x
+    data.append(struct.pack('f', args.pos_offset[1])) # Position offset y
+    data.append(struct.pack('f', args.pos_offset[2])) # Position offset z
+    data.append(struct.pack('f', args.rot_offset[0])) # Rotation offset x
+    data.append(struct.pack('f', args.rot_offset[1])) # Rotation offset y
+    data.append(struct.pack('f', args.rot_offset[2])) # Rotation offset z
+    data.append(struct.pack('f', args.scale[0])) # Scale x
+    data.append(struct.pack('f', args.scale[1])) # Scale y
+    data.append(struct.pack('f', args.scale[2])) # Scale z
 
     static_info = ["chunks_static.bytes", "colors.bytes", "shs.bytes"]
 
@@ -593,10 +604,17 @@ def linealize_colors(dc, opacity):
     opacity = square_centered01(sigmoid(opacity))
     return dc, opacity
 
-if __name__=="__main__":
-    print("Testing")
-    import torch
-    shs = torch.rand(10000, 45)
-    cluster_shs(10000, shs)
+def create_deleted_mask(deleted_path):
+    with open(deleted_path, 'rb') as f:
+        deleted = np.fromfile(f, dtype=np.uint8)
+    mask = np.unpackbits(deleted).astype(bool)
+    # to torch
+    #mask = torch.from_numpy(mask)
+    return mask
 
-    #create_one_file("output/gym/unity_format", splat_count=298081)
+
+if __name__=="__main__":
+    deleted_path = "output/scene_deleted.bytes"
+    mask = create_deleted_mask(deleted_path)
+    print("Testing")
+    

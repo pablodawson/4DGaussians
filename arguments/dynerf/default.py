@@ -24,5 +24,10 @@ OptimizationParams = dict(
     opacity_threshold_coarse = 0.005,
     opacity_threshold_fine_init = 0.005,
     opacity_threshold_fine_after = 0.005,
-    # pruning_interval = 2000
+
+    # LightGaussian pruning
+    prune_iterations = [500, 24_000],
+    prune_percent = 0.5,
+    v_pow = 0.1,
+    prune_decay = 0.7
 )

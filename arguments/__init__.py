@@ -136,8 +136,8 @@ class OptimizationParams(ParamGroup):
         self.opacity_threshold_fine_after = 0.005
 
         # LightGaussian pruning
-        self.prune_iterations = [16_000, 24_000]
-        self.prune_percent = 0.5
+        self.prune_iterations = [50_000, 24_000]
+        self.prune_percent = 0.6
         self.v_pow = 0.1
         self.prune_decay = 0.8
         

@@ -371,6 +371,23 @@ class GaussianModel:
         self.denom = self.denom[valid_points_mask]
         self.max_radii2D = self.max_radii2D[valid_points_mask]
 
+    def prune_points_render(self, mask, order):
+        
+        # Undo ordering to prune the correct points
+        mask = mask[np.argsort(order)]
+
+        valid_points_mask = ~mask
+        
+        self._xyz = self._xyz[valid_points_mask]
+        self._features_dc = self._features_dc[valid_points_mask]
+        self._features_rest = self._features_rest[valid_points_mask]
+        self._opacity = self._opacity[valid_points_mask]
+        self._scaling = self._scaling[valid_points_mask]
+        self._rotation = self._rotation[valid_points_mask]
+        self._deformation_accum = self._deformation_accum[valid_points_mask]
+        self._deformation_table = self._deformation_table[valid_points_mask]
+        self.max_radii2D = self.max_radii2D[valid_points_mask]
+
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
