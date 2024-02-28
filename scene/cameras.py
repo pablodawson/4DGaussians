@@ -30,6 +30,8 @@ class Camera(nn.Module):
         self.FoVy = FoVy
         self.image_name = image_name
         self.time = time
+        self.estimated_depth = None
+        
         try:
             self.data_device = torch.device(data_device)
         except Exception as e:

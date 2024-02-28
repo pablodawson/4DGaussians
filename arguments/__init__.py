@@ -154,6 +154,15 @@ class OptimizationParams(ParamGroup):
         self.v_pow = 0.1,
         self.prune_decay = 0.7
 
+        # Depth estimation
+        self.depths_path = 'depths'
+        self.depth_model = 'zoe'
+
+        # Depth regularization
+        self.regularize_depth = True
+        self.regularize_depth_start = 1
+        self.regularize_depth_end = 15000
+
 def get_combined_args(parser : ArgumentParser):
     cmdlne_string = sys.argv[1:]
     cfgfile_string = "Namespace()"

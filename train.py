@@ -32,6 +32,7 @@ from time import time
 import copy
 
 from prune import prune_list
+from depth import DepthEstimator
 
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
 
@@ -42,7 +43,7 @@ except ImportError:
     TENSORBOARD_FOUND = False
 def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations, 
                          checkpoint_iterations, checkpoint, debug_from,
-                         gaussians, scene, stage, tb_writer, train_iter,timer):
+                         gaussians, scene, stage, tb_writer, train_iter,timer, depth_estimator=None):
     first_iter = 0
 
     gaussians.training_setup(opt)
@@ -192,6 +193,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             radii_list.append(radii.unsqueeze(0))
             visibility_filter_list.append(visibility_filter.unsqueeze(0))
             viewspace_point_tensor_list.append(viewspace_point_tensor)
+
+            if (args.regularize_depth):
+                estimated_depth = viewpoint_cam.estimated_depth
         
 
         radii = torch.cat(radii_list,0).max(dim=0).values
@@ -217,6 +221,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         # if opt.lambda_lpips !=0:
         #     lpipsloss = lpips_loss(image_tensor,gt_image_tensor,lpips_model)
         #     loss += opt.lambda_lpips * lpipsloss
+        
+        if (args.regularize_depth):
+            rendered_depth = render_pkg["depth"]
+            loss_depth = (rendered_depth - estimated_depth).abs().mean()
+            loss += args.lambda_depth * loss_depth
+
         
         loss.backward()
         if torch.isnan(loss).any():
@@ -320,12 +330,16 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     timer = Timer()
     scene = Scene(dataset, gaussians, load_coarse=None)
     timer.start()
+
+    if args.regularize_depth:
+        depth_estimator = DepthEstimator(scene, dataset, **vars(args))
+
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                              checkpoint_iterations, checkpoint, debug_from,
-                             gaussians, scene, "coarse", tb_writer, opt.coarse_iterations,timer)
+                             gaussians, scene, "coarse", tb_writer, opt.coarse_iterations,timer, depth_estimator)
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
-                         gaussians, scene, "fine", tb_writer, opt.iterations,timer)
+                         gaussians, scene, "fine", tb_writer, opt.iterations,timer, depth_estimator)
 
 def prepare_output_and_logger(expname):    
     if not args.model_path:
@@ -444,7 +458,9 @@ if __name__ == "__main__":
     # Start GUI server, configure and run training
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), hp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, args.expname)
+    training(lp.extract(args), hp.extract(args), op.extract(args), pp.extract(args), 
+             args.test_iterations, args.save_iterations, args.checkpoint_iterations, 
+             args.start_checkpoint, args.debug_from, args.expname)
 
     # All done
     print("\nTraining complete.")
