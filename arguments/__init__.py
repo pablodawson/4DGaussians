@@ -49,6 +49,7 @@ class ModelParams(ParamGroup):
         self.sh_degree = 3
         self._source_path = ""
         self._model_path = ""
+        self._depths_path = ""
         self._images = "images"
         self._resolution = -1
         self._white_background = True
@@ -58,6 +59,7 @@ class ModelParams(ParamGroup):
         self.add_points=False
         self.extension=".png"
         self.llffhold=8
+        
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):
@@ -153,15 +155,15 @@ class OptimizationParams(ParamGroup):
         self.prune_percent = 0.5,
         self.v_pow = 0.1,
         self.prune_decay = 0.7
-
+        
         # Depth estimation
-        self.depths_path = 'depths'
         self.depth_model = 'zoe'
 
         # Depth regularization
         self.regularize_depth = True
         self.regularize_depth_start = 1
         self.regularize_depth_end = 15000
+        self.lambda_depth = 0.02
 
 def get_combined_args(parser : ArgumentParser):
     cmdlne_string = sys.argv[1:]

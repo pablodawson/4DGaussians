@@ -50,7 +50,7 @@ class Load_hyper_data(Dataset):
             meta_json = json.load(f)
         with open(f'{datadir}/dataset.json', 'r') as f:
             dataset_json = json.load(f)
-
+        
         self.near = scene_json['near']
         self.far = scene_json['far']
         self.coord_scale = scene_json['scale']

@@ -44,7 +44,7 @@ class CameraInfo(NamedTuple):
     time : float
     mask: np.array
    
-class SceneInfo(NamedTuple):
+class  SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
     train_cameras: list
     test_cameras: list
@@ -381,6 +381,8 @@ def readHyperDataInfos(datadir,use_bg_points,eval):
     video_cam_infos = copy.deepcopy(test_cam_infos)
     video_cam_infos.split="video"
 
+    #bin_path = os.path.join(datadir, "colmap/dense/workspace/sparse/points3D.bin")
+    #_, _, errors = read_points3D_binary(bin_path)
 
     ply_path = os.path.join(datadir, "points3D_downsample.ply")
     pcd = fetchPly(ply_path)

@@ -73,6 +73,9 @@ class Scene:
         # self.video_camera = cameraList_from_camInfos(scene_info.video_cameras,-1,args)
         xyz_max = scene_info.point_cloud.points.max(axis=0)
         xyz_min = scene_info.point_cloud.points.min(axis=0)
+
+        self.points = scene_info.point_cloud
+        
         if args.add_points:
             print("add points.")
             # breakpoint()
@@ -105,3 +108,12 @@ class Scene:
         return self.test_camera
     def getVideoCameras(self, scale=1.0):
         return self.video_camera
+    
+    def setTrainCameras(self, cameras):
+        self.train_camera = cameras
+
+    def setTestCameras(self, cameras):
+        self.test_camera = cameras
+
+    def setVideoCameras(self, cameras):
+        self.video_camera = cameras
