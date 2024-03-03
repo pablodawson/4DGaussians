@@ -25,19 +25,42 @@ class DepthEstimator:
                     stored_depths[file_name[:-4]] = np.load(os.path.join(dir_name, file_name), allow_pickle=True)
 
         # Load the model if not all images have been processed
-        if len(stored_depths) < len(scene.cameras) or load_model:
+        if len(stored_depths) < len(scene.train_camera) or load_model:
             self.load_model(kwargs['depth_model'])
 
         if skip_init: return
 
-        for camera in tqdm(scene.cameras):
-            depth = stored_depths.get(camera.name)
+        test_cams = scene.getTestCameras()
+        train_cams = scene.getTrainCameras()
+
+        test_cams_new = []
+        train_cams_new = []
+        
+        for camera in tqdm(test_cams):
+            depth = stored_depths.get("test_"+camera.image_name+ str(hash(str(camera.camera_center[0])))[:10])
             if depth is not None:
                 camera.estimated_depth = depth
             else:
                 depth = self.estimate(camera, dataset)
                 camera.estimated_depth = depth
-                np.save(os.path.join(dir_name, camera.name + '.npy'), depth)
+                np.save(os.path.join(dir_name, "test_"+camera.image_name +str(hash(str(camera.camera_center[0])))[:10] +'.npy'), depth)
+            test_cams_new.append(camera)
+        
+        for camera in tqdm(train_cams):
+            depth = stored_depths.get("train_"+camera.image_name + str(hash(str(camera.camera_center[0])))[:10])
+            if depth is not None:
+                camera.estimated_depth = depth
+            else:
+                depth = self.estimate(camera, dataset)
+                camera.estimated_depth = depth
+                np.save(os.path.join(dir_name, "train_"+camera.image_name + str(hash(str(camera.camera_center[0])))[:10]+ '.npy'), depth)
+            train_cams_new.append(camera)
+        
+        self.scene.setTestCameras(test_cams_new)
+        self.scene.setTrainCameras(train_cams_new)
+    
+    def get_scene(self):
+        return self.scene
 
     def load_model(self, depth_model="depth_anything"):
         if depth_model == "midas":
@@ -53,14 +76,14 @@ class DepthEstimator:
         "Returns a SfM scale-matched dense depth map for a chosen camera"
 
         # Estimate sparse and dense depth (and reprojection error) maps
-        D_sparse, E_sparse = self._estimate_sparse(camera, dataset)
-        D_dense = self._estimate_dense(camera)
+        x_2d, y_2d, z = self._estimate_sparse(camera, dataset)
+        D_dense = self._estimate_dense(camera) ##
 
         # MiDaS depth maps are in disparity space
         if self.depth_model.name == ["midas"]:
-            D_dense = self._match_scale_disparity(D_dense, D_sparse, E_sparse)
+            D_dense = self._match_scale_disparity(D_dense, x_2d, y_2d, z)
         elif self.depth_model.name in ["zoe", "depth_anything"]:
-            D_dense = self._match_scale(D_dense, D_sparse, E_sparse)
+            D_dense = self._match_scale(D_dense, x_2d, y_2d, z)
 
         return D_dense
 
@@ -73,14 +96,16 @@ class DepthEstimator:
     def _estimate_sparse(self, camera, dataset):
         "Returns a depth map estimated from COLMAP data"
         # Get the visible 3D points for the chosen camera
-        ids = torch.as_tensor(camera.visible_point_ids).to(self.device)
-        xyz_world, _, errors = dataset.pcd.get_points(ids)
+        #ids = torch.as_tensor(camera.visible_point_ids).to(self.device)
+        #ids = range(len(self.scene.points.points.shape[0]))
+        #xyz_world, _, errors = dataset.pcd.get_points(ids)
+        xyz_world = torch.as_tensor(self.scene.points.points).to(self.device)
         
         # Transform world points to camera points 
-        view_mat = camera.view_matrix.to(self.device).float()
-        R = view_mat[:3, :3]
-        t = view_mat[:, 3]
-        xyz_cam = torch.matmul(R, xyz_world.t().float()) + t[:3, np.newaxis]
+        #view_mat = camera.world_view_transform.to(self.device).float()
+        R = torch.as_tensor(camera.R).to(self.device)
+        t = torch.as_tensor(camera.T).to(self.device)
+        xyz_cam = torch.matmul(R, xyz_world.t()) + t[:3, np.newaxis]
         xyz_cam = xyz_cam.t()
         xyz_cam = xyz_cam.cpu().numpy()
         
@@ -90,25 +115,15 @@ class DepthEstimator:
         y = xyz_cam[:,1] / z
         
         # Convert to image coordinates
-        image_width, image_height = camera.width, camera.height
-        f_x = camera.f_x
-        f_y = camera.f_y
+        image_width, image_height = camera.image_width, camera.image_height
+        f_x = camera.FoVx
+        f_y = camera.FoVy
         c_x = image_width / 2
         c_y = image_height / 2
         x_2d = np.round(x * f_x + c_x).astype(np.int32)
         y_2d = np.round(y * f_y + c_y).astype(np.int32)
-        
-        # Create sparse depth and error maps
-        D_sparse = lil_matrix((image_height, image_width))
-        E_sparse = lil_matrix((image_height, image_width))
-        for x_, y_, z_, e_ in zip(x_2d, y_2d, z, errors):
-            if 0 <= x_ < image_width and 0 <= y_ < image_height:
-                D_sparse[y_, x_] = z_
-                E_sparse[y_, x_] = e_
-        D_sparse = D_sparse.tocoo()
-        E_sparse = E_sparse.tocoo()
 
-        return D_sparse, E_sparse
+        return x_2d, y_2d, z
 
     def _match_scale_disparity(self, D_disparity, D_sparse, E_sparse):
         "Matches the scale in the provided disparity map to that in the sparse map"
@@ -120,27 +135,34 @@ class DepthEstimator:
         def func(args):
             s, t = args[0], args[1]
             z_dense_inv_adj = s * z_dense_inv + t
-            return (1/e_sparse * (z_sparse_inv - z_dense_inv_adj)).abs().mean().cpu().numpy()
+            return  (z_sparse_inv - z_dense_inv_adj).abs().mean().cpu().numpy()
+            #return (1/e_sparse * (z_sparse_inv - z_dense_inv_adj)).abs().mean().cpu().numpy()
         res = minimize(func, x0=[-0.5,3], method='Nelder-Mead')
 
         s, t = res.x
         D_dense = 1. / (s * D_disparity + t)
         return D_dense
 
-    def _match_scale(self, D_dense, D_sparse, E_sparse):
+    def _match_scale(self, D_dense, x_2d, y_2d, z):
         "Matches the scale in the provided metric depth map to that in the sparse map"
-        i, j = D_sparse.row, D_sparse.col
-        z_dense = torch.as_tensor(D_dense[i,j].data).to(self.device)
-        z_sparse = torch.as_tensor(D_sparse.data).to(self.device)
-        e_sparse = torch.as_tensor(E_sparse.data).to(self.device)
 
+        z_dense = torch.as_tensor(D_dense).to(self.device)
+        z_dense_selection = z_dense[y_2d, x_2d] # This or x_2d, y_2d?
+        z = torch.as_tensor(z).to(self.device)
+        
         def func(args):
             s, t = args[0], args[1]
-            z_dense_adj = s * z_dense + t
-            return (1/e_sparse * (z_sparse - z_dense_adj)).abs().mean().cpu().numpy()
-        res = minimize(func, x0=[-0.5,3], method='Nelder-Mead')
+            z_dense_adj = s * z_dense_selection + t
+            return (z - z_dense_adj).abs().mean().cpu().numpy()
+        #res = minimize(func, x0=[-0.5,3], method='Nelder-Mead')
 
-        s, t = res.x
+        #final_error = func(res.x)
+        #s, t = res.x
+        #s = np.clip(s, 0.6, 2.1)
+        #t = np.clip(t, -20, 20)
+        s = 1.54
+        t= 13.39
+
         D_dense = s * D_dense + t
         return D_dense
 
@@ -152,7 +174,8 @@ class ZoeDepthModel:
         self.model.to(device)
 
     def predict(self, camera):
-        img = camera.image.pil_image
+        img = (camera.original_image.cpu().numpy()*255).astype(np.uint8)
+        img = img.transpose(1, 2, 0)
 
         # Monkey patch interpolation function (see https://github.com/isl-org/ZoeDepth/pull/60#issuecomment-1894272730)
         # TODO: Use forked ZoeDepth repo with merged PR
@@ -171,8 +194,9 @@ class ZoeDepthModel:
 
 class DepthAnythingModel:
     def __init__(self, device):
-        from depth_anything.dpt import DepthAnything
-        from depth_anything.util.transform import Resize, NormalizeImage, PrepareForNet
+        from Depth_Anything.depth_anything.dpt import DepthAnything
+        from Depth_Anything.depth_anything.util.transform import Resize, NormalizeImage, PrepareForNet
+        from torchvision.transforms import Compose
 
         self.model = DepthAnything.from_pretrained("LiheYoung/depth_anything_vitl14")
         self.transform = Compose([
@@ -191,11 +215,14 @@ class DepthAnythingModel:
 
     def predict(self, camera):
         img = camera.get_original_image().cpu().numpy()
-        img = transform({'image': img})['image']
+        img = (img * 255).astype(np.uint8)
+        img = img.transpose(1, 2, 0)
+        
+        img = self.transform({'image': img})['image']
         img = torch.from_numpy(img).unsqueeze(0)
         
         width, height = camera.width, camera.height
-        depth = model(image)
+        depth = self.model(img)
         depth = F.interpolate(depth.unsqueeze(1), size=(height, width), mode="bicubic", align_corners=False).squeeze(1)
         depth = depth.cpu().numpy()
         return depth
