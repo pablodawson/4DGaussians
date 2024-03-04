@@ -393,7 +393,7 @@ class GaussianModel:
         self.max_radii2D = self.max_radii2D[valid_points_mask]
     
     def prune_gaussians(self, percent, import_score: list):
-        ic(import_score.shape)
+        print(import_score.shape)
         sorted_tensor, _ = torch.sort(import_score, dim=0)
         index_nth_percentile = int(percent * (sorted_tensor.shape[0] - 1))
         value_nth_percentile = sorted_tensor[index_nth_percentile]

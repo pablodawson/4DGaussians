@@ -113,7 +113,7 @@ class OptimizationParams(ParamGroup):
         self.dataloader=False
         self.zerostamp_init=False
         self.custom_sampler=None
-        self.iterations = 30_000
+        self.iterations = 20_000
         self.coarse_iterations = 3000
         self.position_lr_init = 0.00016
         self.position_lr_final = 0.0000016
@@ -151,7 +151,7 @@ class OptimizationParams(ParamGroup):
         self.add_point=False
 
         # LightGaussian pruning
-        self.prune_iterations = [500, 24_000],
+        self.prune_iterations = [4000, 16_000],
         self.prune_percent = 0.5,
         self.v_pow = 0.1,
         self.prune_decay = 0.7
@@ -160,7 +160,7 @@ class OptimizationParams(ParamGroup):
         self.depth_model = 'zoe'
 
         # Depth regularization
-        self.regularize_depth = True
+        self.regularize_depth = False
         self.regularize_depth_start = 1
         self.regularize_depth_end = 15000
         self.lambda_depth = 0.02

@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 colmap = "C:/Users/Pablo/Downloads/COLMAP-3.9.1-windows-cuda/COLMAP-3.9.1-windows-cuda/COLMAP.bat"
+
 def main(workdir, datatype):
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     
@@ -40,6 +41,6 @@ def main(workdir, datatype):
     subprocess.run([colmap, "stereo_fusion", "--workspace_path", os.path.join(workdir, "colmap", "dense", "workspace"), "--output_path", os.path.join(workdir, "colmap", "dense", "workspace", "fused.ply")])
 
 if __name__ == "__main__":
-    workdir = "data/coffee_martini/coffee_martini"
+    workdir = "D:/capturas/bici2/output"
     datatype = "llff"
     main(workdir, datatype)

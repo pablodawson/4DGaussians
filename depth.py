@@ -103,8 +103,8 @@ class DepthEstimator:
         
         # Transform world points to camera points 
         #view_mat = camera.world_view_transform.to(self.device).float()
-        R = torch.as_tensor(camera.R).to(self.device)
-        t = torch.as_tensor(camera.T).to(self.device)
+        R = torch.as_tensor(camera.R).to(self.device).float()
+        t = torch.as_tensor(camera.T).to(self.device).float()
         xyz_cam = torch.matmul(R, xyz_world.t()) + t[:3, np.newaxis]
         xyz_cam = xyz_cam.t()
         xyz_cam = xyz_cam.cpu().numpy()
